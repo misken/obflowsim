@@ -37,6 +37,16 @@ Key Lessons Learned:
 
 
 class OBsystem(object):
+    """
+    Purpose:
+
+    - acts as a container for the collection of units
+    - acts as a container for the global variables
+    - acts as a container for the timestamps dictionaries
+
+    Instead of passing around the above individually, just pass this system object around
+
+    """
     def __init__(self, env, locations, global_vars):
         self.env = env
 
@@ -63,8 +73,36 @@ class OBsystem(object):
 
 
 class PatientType(IntEnum):
-    REG_DELIVERY_UNSCHED = 1
-    CSECT_DELIVERY_UNSCHED = 2
+    """
+    # Patient Type and Patient Flow Definitions
+
+    # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
+    # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
+    # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
+    # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
+    # Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
+    # Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
+    # Type 7: sched arrival, C-section delivery, route = 1-3-2-4
+
+    # Type 8: urgent induced arrival, regular delivery, route = 1-2-4
+    # Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
+
+    # Type 10: random arrival, non-delivered LD, route = 1
+    # Type 11: random arrival, non-delivered PP route = 4
+    """
+    RAND_SPONT_REG = 1
+    RAND_SPONT_CSECT = 2
+    RAND_AUG_REG = 3
+    RAND_AUG_CSECT = 4
+    SCHED_IND_REG = 5
+    SCHED_IND_CSECT = 6
+    SCHED_CSECT = 7
+    URGENT_IND_REG = 8
+    URGENT_IND_CSECT = 9
+    RAND_NONDELIV_LD = 10
+    RAND_NONDELIV_PP = 11
+
+
 
 
 class Unit(IntEnum):
@@ -111,7 +149,7 @@ class OBunit(object):
         self.occupancy_list = [(0.0, 0.0)]
 
     def put(self, obpatient, obsystem):
-        """ A process method called when a bed is requested in the unit.
+        """ A process method called when a bed is requested in the unit. Q: Is this a method override or a convention?
 
             The logic of this method is reminiscent of the routing logic
             in the process oriented obflow models 1-3. However, this method
@@ -148,8 +186,8 @@ class OBunit(object):
         # Increments patient's attribute number of units visited (includes ENTRY and EXIT)
 
         obpatient.entry_ts[obpatient.current_stop_num] = self.env.now
-        obpatient.wait_to_enter[obpatient.current_stop_num] = self.env.now - obpatient.request_entry_ts[
-            obpatient.current_stop_num]
+        obpatient.wait_to_enter[obpatient.current_stop_num] = \
+            self.env.now - obpatient.request_entry_ts[obpatient.current_stop_num]
         obpatient.current_unit_id = self.id
 
         self.num_entries += 1
@@ -184,7 +222,8 @@ class OBunit(object):
         los = obpatient.route_graph.nodes(data=True)[obpatient.current_unit_id]['planned_los']
         obpatient.planned_los[obpatient.current_stop_num] = los
 
-        # Do any blocking related los adjustments
+        # Do any blocking related los adjustments.
+        # TODO: This is hard coded logic. Need general scheme for blocking adjustments.
         if self.name == 'LDR':
             adj_los = max(0, los - obpatient.wait_to_exit[obpatient.current_stop_num - 1])
         else:
@@ -307,10 +346,11 @@ class OBPatient(object):
         self.router = router
 
         # Determine patient type
+        # TODO: Generalize for full patient type scheme
         if arr_stream_rg.random() > obsystem.global_vars['c_sect_prob']:
-            self.patient_type = PatientType.REG_DELIVERY_UNSCHED
+            self.patient_type = PatientType.RAND_SPONT_REG
         else:
-            self.patient_type = PatientType.CSECT_DELIVERY_UNSCHED
+            self.patient_type = PatientType.RAND_SPONT_CSECT
 
         self.name = f'Patient_i{patient_id}_t{self.patient_type}'
 
@@ -319,6 +359,7 @@ class OBPatient(object):
         self.current_unit_id = None
         self.next_unit_id = None
 
+        # TODO: How to do general routing by patient type
         self.route_graph = router.create_route(self.patient_type)
         self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
 
@@ -348,6 +389,7 @@ class OBPatient(object):
 class OBStaticRouter(object):
     def __init__(self, env, obsystem, locations, routes, rg):
         """
+        TODO: New routing scheme
 
         Parameters
         ----------
@@ -392,6 +434,10 @@ class OBStaticRouter(object):
         Returns
         -------
 
+        Notes
+        -----
+        TODO: Lots of hard coded LOS distribution elements in here
+
         """
 
         # Copy the route template to create new graph object
@@ -407,12 +453,12 @@ class OBStaticRouter(object):
         mean_los_pp_c = self.obsystem.global_vars['mean_los_pp_c']
 
         # Generate the random planned LOS values by patient type
-        if patient_type == PatientType.REG_DELIVERY_UNSCHED:
+        if patient_type == PatientType.RAND_SPONT_REG:
             route_graph.nodes[Unit.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
             route_graph.nodes[Unit.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
             route_graph.nodes[Unit.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_noc / k_pp)
 
-        elif patient_type == PatientType.CSECT_DELIVERY_UNSCHED:
+        elif patient_type == PatientType.RAND_SPONT_CSECT:
             k_csect = self.obsystem.global_vars['num_erlang_stages_csect']
             mean_los_csect = self.obsystem.global_vars['mean_los_csect']
 
@@ -455,7 +501,7 @@ class OBPatientGenerator(object):
             used for interarrival time generation
         initial_delay : float
             Starts generation after an initial delay. (default 0.0)
-        stoptime : float
+        stop_time : float
             Stops generation at the stoptime. (default Infinity)
         max_arrivals : int
             Stops generation after max_arrivals. (default Infinity)
@@ -463,14 +509,14 @@ class OBPatientGenerator(object):
     """
 
     def __init__(self, env, obsystem, router, arr_rate, arr_stream_rg,
-                 initial_delay=0, stoptime=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
+                 initial_delay=0, stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
         self.env = env
         self.obsystem = obsystem
         self.router = router
         self.arr_rate = arr_rate
         self.arr_stream_rg = arr_stream_rg
         self.initial_delay = initial_delay
-        self.stoptime = stoptime
+        self.stop_time = stop_time
         self.max_arrivals = max_arrivals
 
         self.out = None
@@ -486,7 +532,7 @@ class OBPatientGenerator(object):
         # Delay for initial_delay
         yield self.env.timeout(self.initial_delay)
         # Main generator loop that terminates when stoptime reached
-        while self.env.now < self.stoptime and \
+        while self.env.now < self.stop_time and \
                 self.num_patients_created < self.max_arrivals:
             # Compute next interarrival time
             iat = self.arr_stream_rg.exponential(1.0 / self.arr_rate)
