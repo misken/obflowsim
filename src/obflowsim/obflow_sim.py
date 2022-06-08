@@ -5,6 +5,23 @@ from copy import deepcopy
 from pathlib import Path
 import argparse
 
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Optional,
+    Tuple,
+)
+
+if TYPE_CHECKING and TYPE_CHECKING != 'SPHINX':  # Avoid circular import
+    from simpy.core import Environment, SimTime
+
 import pandas as pd
 import simpy
 from numpy.random import default_rng
@@ -47,21 +64,16 @@ class OBsystem(object):
     Instead of passing around the above individually, just pass this system object around
 
     """
-    def __init__(self, env, locations, global_vars):
+
+    def __init__(self, env: 'Environment', locations: Dict, global_vars: Dict):
         self.env = env
 
-        # Create individual patient care units
-        # enter = EnterFlow(self.env, 'ENTRY')
-        # exit = ExitFlow(self.env, 'EXIT')
-        # self.obunits = [enter]
-
+        # Create units container and individual patient care units
         self.obunits = []
-
         # Unit index in obunits list should correspond to Unit enum value
         for location in locations:
             self.obunits.append(OBunit(env, unit_id=location, name=locations[location]['name'],
                                        capacity=locations[location]['capacity']))
-        # self.obunits.append(exit)
 
         self.global_vars = global_vars
 
@@ -103,15 +115,16 @@ class PatientType(IntEnum):
     RAND_NONDELIV_PP = 11
 
 
-
-
-class Unit(IntEnum):
+class OBunitId(IntEnum):
     ENTRY = 0
     OBS = 1
     LDR = 2
     CSECT = 3
     PP = 4
-    EXIT = 5
+    LDRP = 5
+    LD = 6
+    RECOVERY = 8
+    EXIT = 8
 
 
 class OBunit(object):
@@ -128,7 +141,7 @@ class OBunit(object):
 
     """
 
-    def __init__(self, env, unit_id, name, capacity=simpy.core.Infinity):
+    def __init__(self, env: 'Environment', unit_id: int, name: str, capacity: int = simpy.core.Infinity):
 
         self.env = env
         self.id = unit_id
@@ -149,17 +162,18 @@ class OBunit(object):
         self.occupancy_list = [(0.0, 0.0)]
 
     def put(self, obpatient, obsystem):
-        """ A process method called when a bed is requested in the unit. Q: Is this a method override or a convention?
+        """
+        A process method called when a bed is requested in the unit.
 
-            The logic of this method is reminiscent of the routing logic
-            in the process oriented obflow models 1-3. However, this method
-            is used for all of the units - no repeated logic.
+        The logic of this method is reminiscent of the routing logic
+        in the process oriented obflow models 1-3. However, this method
+        is used for all of the units - no repeated logic.
 
-            Parameters
-            ----------
-            obpatient : OBPatient object
-                the patient requesting the bed
-            obsystem : OBSystem object
+        Parameters
+        ----------
+        obpatient : OBPatient object
+            the patient requesting the bed
+        obsystem : OBSystem object
 
         """
         obpatient.current_stop_num += 1
@@ -206,6 +220,7 @@ class OBunit(object):
             obpatient.previous_unit_id = obpatient.unit_stops[obpatient.current_stop_num - 1]
             previous_unit = obsystem.obunits[obpatient.previous_unit_id]
             previous_request = obpatient.bed_requests[obpatient.current_stop_num - 1]
+            # Release the previous bed
             previous_unit.unit.release(previous_request)
             previous_unit.tot_occ_time += \
                 self.env.now - obpatient.entry_ts[obpatient.current_stop_num - 1]
@@ -235,7 +250,7 @@ class OBunit(object):
         yield self.env.timeout(adj_los)
 
         # Go to next destination (which could be an exitflow)
-        if obpatient.current_unit_id == Unit.EXIT:
+        if obpatient.current_unit_id == OBunitId.EXIT:
             obpatient.previous_unit_id = obpatient.unit_stops[obpatient.current_stop_num]
             previous_unit = obsystem.obunits[obpatient.previous_unit_id]
             previous_request = obpatient.bed_requests[obpatient.current_stop_num]
@@ -249,60 +264,24 @@ class OBunit(object):
 
             obpatient.request_exit_ts[obpatient.current_stop_num] = self.env.now
             obpatient.exit_ts[obpatient.current_stop_num] = self.env.now
-            self.exit_system(obpatient, obsystem)
+            obpatient.exit_system(self.env, obsystem)
         else:
             obpatient.next_unit_id = obpatient.router.get_next_unit_id(obpatient)
             self.env.process(obsystem.obunits[obpatient.next_unit_id].put(obpatient, obsystem))
-
-        # EXIT is now an OBunit so following is deprecated
-        # if obpatient.next_unit_id == Unit.EXIT:
-        #     # For ExitFlow object, no process needed
-        #     obsystem.obunits[obpatient.next_unit_id].put(obpatient, obsystem)
-        # else:
-        #     # Process for putting patient into next bed
-        #     self.env.process(obsystem.obunits[obpatient.next_unit_id].put(obpatient, obsystem))
 
     def inc_occ(self, increment=1):
 
         # Update occupancy - increment by 1
         prev_occ = self.occupancy_list[-1][1]
-        new_occ = (self.env.now, prev_occ + increment)
-        self.occupancy_list.append(new_occ)
+        new_ts_occ = (self.env.now, prev_occ + increment)
+        self.occupancy_list.append(new_ts_occ)
 
     def dec_occ(self, decrement=1):
 
-        # Update occupancy - increment by 1
+        # Update occupancy - decrement by 1
         prev_occ = self.occupancy_list[-1][1]
-        new_occ = (self.env.now, prev_occ - decrement)
-        self.occupancy_list.append(new_occ)
-
-    def exit_system(self, obpatient, obsystem):
-
-        logging.debug(f"{self.env.now:.4f}:Patient {obpatient.name} exited system at {self.env.now:.2f}.")
-
-        # Create dictionaries of timestamps for patient_stop log
-        for stop in range(len(obpatient.unit_stops)):
-            if obpatient.unit_stops[stop] is not None:
-                timestamps = {'patient_id': obpatient.patient_id,
-                              'patient_type': obpatient.patient_type.value,
-                              'unit': Unit(obpatient.unit_stops[stop]).name,
-                              'request_entry_ts': obpatient.request_entry_ts[stop],
-                              'entry_ts': obpatient.entry_ts[stop],
-                              'request_exit_ts': obpatient.request_exit_ts[stop],
-                              'exit_ts': obpatient.exit_ts[stop],
-                              'planned_los': obpatient.planned_los[stop],
-                              'adjusted_los': obpatient.adjusted_los[stop],
-                              'entry_tryentry': obpatient.entry_ts[stop] - obpatient.request_entry_ts[stop],
-                              'tryexit_entry': obpatient.request_exit_ts[stop] - obpatient.entry_ts[stop],
-                              'exit_tryexit': obpatient.exit_ts[stop] - obpatient.request_exit_ts[stop],
-                              'exit_enter': obpatient.exit_ts[stop] - obpatient.entry_ts[stop],
-                              'exit_tryenter': obpatient.exit_ts[stop] - obpatient.request_entry_ts[stop],
-                              'wait_to_enter': obpatient.wait_to_enter[stop],
-                              'wait_to_exit': obpatient.wait_to_exit[stop],
-                              'bwaited_to_enter': obpatient.entry_ts[stop] > obpatient.request_entry_ts[stop],
-                              'bwaited_to_exit': obpatient.exit_ts[stop] > obpatient.request_exit_ts[stop]}
-
-                obsystem.stops_timestamps_list.append(timestamps)
+        new_ts_occ = (self.env.now, prev_occ - decrement)
+        self.occupancy_list.append(new_ts_occ)
 
     def basic_stats_msg(self):
         """ Compute entries, exits, avg los and create summary message.
@@ -381,6 +360,34 @@ class OBPatient(object):
 
         self.system_exit_ts = None
 
+    def exit_system(self, env, obsystem):
+
+        logging.debug(f"{self.env.now:.4f}:Patient {self.name} exited system at {self.env.now:.2f}.")
+
+        # Create dictionaries of timestamps for patient_stop log
+        for stop in range(len(self.unit_stops)):
+            if obpatient.unit_stops[stop] is not None:
+                timestamps = {'patient_id': self.patient_id,
+                              'patient_type': self.patient_type.value,
+                              'unit': OBunitId(self.unit_stops[stop]).name,
+                              'request_entry_ts': self.request_entry_ts[stop],
+                              'entry_ts': self.entry_ts[stop],
+                              'request_exit_ts': self.request_exit_ts[stop],
+                              'exit_ts': self.exit_ts[stop],
+                              'planned_los': self.planned_los[stop],
+                              'adjusted_los': self.adjusted_los[stop],
+                              'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
+                              'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
+                              'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
+                              'wait_to_enter': self.wait_to_enter[stop],
+                              'wait_to_exit': self.wait_to_exit[stop],
+                              'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
+                              'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
+
+                obsystem.stops_timestamps_list.append(timestamps)
+
     def __repr__(self):
         return "patientid: {}, patient_type: {}, time: {}". \
             format(self.patient_id, self.patient_type, self.system_arrival_ts)
@@ -403,7 +410,7 @@ class OBStaticRouter(object):
         self.obsystem = obsystem
         self.rg = rg
 
-        # List of networkx DiGraph objects. Padded with None at 0 index to align with patient type ints
+        # Dict of networkx DiGraph objects
         self.route_graphs = {}
 
         # Create route templates from routes list (of unit numbers)
@@ -420,7 +427,7 @@ class OBStaticRouter(object):
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
 
-            # Each patient will eventually end up with their own copy of the route since it contains LOS values
+            # Each patient will eventually end up with their own copy of the route since it will contain LOS values
             self.route_graphs[route_num] = route_graph.copy()
             logging.debug(f"{self.env.now:.4f}:route graph {route_num} - {route_graph.edges}")
 
@@ -454,18 +461,18 @@ class OBStaticRouter(object):
 
         # Generate the random planned LOS values by patient type
         if patient_type == PatientType.RAND_SPONT_REG:
-            route_graph.nodes[Unit.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
-            route_graph.nodes[Unit.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
-            route_graph.nodes[Unit.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_noc / k_pp)
+            route_graph.nodes[OBunitId.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
+            route_graph.nodes[OBunitId.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
+            route_graph.nodes[OBunitId.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_noc / k_pp)
 
         elif patient_type == PatientType.RAND_SPONT_CSECT:
             k_csect = self.obsystem.global_vars['num_erlang_stages_csect']
             mean_los_csect = self.obsystem.global_vars['mean_los_csect']
 
-            route_graph.nodes[Unit.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
-            route_graph.nodes[Unit.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
-            route_graph.nodes[Unit.CSECT]['planned_los'] = self.rg.gamma(k_csect, mean_los_csect / k_csect)
-            route_graph.nodes[Unit.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_c / k_pp)
+            route_graph.nodes[OBunitId.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
+            route_graph.nodes[OBunitId.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
+            route_graph.nodes[OBunitId.CSECT]['planned_los'] = self.rg.gamma(k_csect, mean_los_csect / k_csect)
+            route_graph.nodes[OBunitId.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_c / k_pp)
 
         return route_graph
 
@@ -522,11 +529,12 @@ class OBPatientGenerator(object):
         self.out = None
         self.num_patients_created = 0
 
-        # Register the run() method as a SimPy process
+        # Trigger the run() method and register it as a SimPy process
         env.process(self.run())
 
     def run(self):
-        """The patient generator.
+        """
+        Generate patients.
         """
 
         # Delay for initial_delay
@@ -546,7 +554,7 @@ class OBPatientGenerator(object):
             logging.debug(f"{self.env.now:.4f}:Patient {obpatient.name} created at {self.env.now:.4f}.")
 
             # Initiate process of patient entering system
-            self.env.process(self.obsystem.obunits[Unit.ENTRY].put(obpatient, self.obsystem))
+            self.env.process(self.obsystem.obunits[OBunitId.ENTRY].put(obpatient, self.obsystem))
 
 
 def process_command_line(argv=None):
@@ -624,8 +632,8 @@ def simulate(sim_inputs, rep_num):
     router = OBStaticRouter(env, obsystem, locations, routes, rg['los'])
 
     # Create patient generator
-    obpat_gen = OBPatientGenerator(env, obsystem, router, global_vars['arrival_rate'],
-                                   rg['arrivals'], max_arrivals=1000000)
+    patient_generator = OBPatientGenerator(env, obsystem, router, global_vars['arrival_rate'],
+                                           rg['arrivals'], max_arrivals=1000000)
 
     # Run the simulation replication
     env.run(until=run_time)
@@ -634,31 +642,32 @@ def simulate(sim_inputs, rep_num):
     header = obio.output_header("Input traffic parameters", 50, scenario, rep_num)
     print(header)
 
-    rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[Unit.OBS]['capacity']
-    rho_ldr = global_vars['arrival_rate'] * global_vars['mean_los_ldr'] / locations[Unit.LDR]['capacity']
+    rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[OBunitId.OBS]['capacity']
+    rho_ldr = global_vars['arrival_rate'] * global_vars['mean_los_ldr'] / locations[OBunitId.LDR]['capacity']
     mean_los_pp = global_vars['mean_los_pp_c'] * global_vars['c_sect_prob'] + \
                   global_vars['mean_los_pp_noc'] * (1 - global_vars['c_sect_prob'])
 
-    rho_pp = global_vars['arrival_rate'] * mean_los_pp / locations[Unit.PP]['capacity']
+    rho_pp = global_vars['arrival_rate'] * mean_los_pp / locations[OBunitId.PP]['capacity']
 
     print(f"rho_obs: {rho_obs:6.3f}\nrho_ldr: {rho_ldr:6.3f}\nrho_pp: {rho_pp:6.3f}")
 
     # Patient generator stats
     header = obio.output_header("Patient generator and entry/exit stats", 50, scenario, rep_num)
     print(header)
-    print("Num patients generated: {}\n".format(obpat_gen.num_patients_created))
+    print("Num patients generated: {}\n".format(patient_generator.num_patients_created))
 
     # Unit stats
     for unit in obsystem.obunits[1:-1]:
         print(unit.basic_stats_msg())
 
     # System exit stats
-    print("\nNum patients exiting system: {}".format(obsystem.obunits[Unit.EXIT].num_exits))
-    print("Last exit at: {:.2f}\n".format(obsystem.obunits[Unit.EXIT].last_exit))
+    print("\nNum patients exiting system: {}".format(obsystem.obunits[OBunitId.EXIT].num_exits))
+    print("Last exit at: {:.2f}\n".format(obsystem.obunits[OBunitId.EXIT].last_exit))
 
     # Occupancy stats
     occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, run_time,
-                                                    warmup=warmup_time, quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+                                                        warmup=warmup_time,
+                                                        quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
 
     # Write output files
 
