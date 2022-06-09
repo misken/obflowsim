@@ -15,17 +15,26 @@ branching_probs:
     pct_urg_ind_to_c: 0.12
 
 los_params:
-  mean_los_csect: 1.0
-  mean_los_ldr: 12.0
-  mean_los_obs: 2.4
-  mean_los_pp_c: 72.0
-  mean_los_pp_noc: 48.0
-  num_erlang_stages_csect: 4
-  num_erlang_stages_ldr: 2
-  num_erlang_stages_obs: 1
-  num_erlang_stages_pp: 8
+    mean_los_csect: 1.0
+    mean_los_ldr: 12.0
+    mean_los_obs: 2.4
+    mean_los_pp_c: 72.0
+    mean_los_pp_noc: 48.0
+    num_erlang_stages_csect: 4
+    num_erlang_stages_ldr: 2
+    num_erlang_stages_obs: 1
+    num_erlang_stages_pp: 8
   
 los_distributions:
+    RAND_SPONT_REG:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+    RAND_SPONT_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        LDR: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
 
 
 # Do we need id's for the locations since this model has fixed set

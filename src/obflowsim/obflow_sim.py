@@ -30,6 +30,11 @@ import networkx as nx
 import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
 
+ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma',
+                         'geometric', 'hypergeometric', 'laplace', 'logistic', 'lognormal',
+                         'multinomial', 'negative_binomial', 'normal', 'pareto',
+                         'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
+
 """
 Basic OB patient flow model
 

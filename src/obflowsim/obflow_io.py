@@ -25,6 +25,20 @@ def load_config(cfg):
     return yaml_config
 
 
+def create_los_partials(yaml_config):
+    """
+
+    Parameters
+    ----------
+    yaml_config
+
+    Returns
+    -------
+    Dict of partial functions for LOS generation by pat type and unit
+
+    """
+
+
 def write_stop_log(csv_path, obsystem, egress=True):
     """
 
