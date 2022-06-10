@@ -5,6 +5,32 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+import numpy as np
+from numpy.random import default_rng
+import numpy.random
+import json
+from functools import partial
+import copy
+
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Optional,
+    Tuple,
+)
+
+ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma',
+                         'geometric', 'hypergeometric', 'laplace', 'logistic', 'lognormal',
+                         'multinomial', 'negative_binomial', 'normal', 'pareto',
+                         'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
+
 
 def load_config(cfg):
     """
@@ -25,18 +51,48 @@ def load_config(cfg):
     return yaml_config
 
 
-def create_los_partials(yaml_config):
+def create_los_partials(raw_los_dists: Dict, los_params: Dict):
     """
 
     Parameters
     ----------
-    yaml_config
+    raw_los_dist: Dict
+    los_params: Dict
 
     Returns
     -------
     Dict of partial functions for LOS generation by pat type and unit
 
     """
+
+    # Replace all los_param use with literal values
+    los_dists_str_json = json.dumps(raw_los_dists)
+    for param in los_params:
+        los_dists_str_json = los_dists_str_json.replace(param, str(los_params[param]))
+    los_dists_instantiated = json.loads(los_dists_str_json)
+
+    def get_args_and_kwargs(*args, **kwargs):
+        return args, kwargs
+
+    def convert_str_to_args_and_kwargs(s):
+        return eval(s.replace(s[:s.find('(')], 'get_args_and_kwargs'))
+
+    def convert_str_to_func_name(s):
+        return s[:s.find('(')]
+
+    los_dists_partials = copy.deepcopy(los_dists_instantiated)
+    for key_pat_type in los_dists_partials:
+        for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
+            func_name = convert_str_to_func_name(raw_dist_str)
+            # Check for valid func name
+            if func_name in ALLOWED_LOS_DIST_LIST:
+                args, kwargs = convert_str_to_args_and_kwargs(raw_dist_str)
+                partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
+                los_dists_partials[key_pat_type][key_unit] = partial_dist_func
+            else:
+                raise NameError(f"The use of '{func_name}' is not allowed")
+
+    return los_dists_partials
 
 
 def write_stop_log(csv_path, obsystem, egress=True):

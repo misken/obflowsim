@@ -30,11 +30,6 @@ import networkx as nx
 import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
 
-ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma',
-                         'geometric', 'hypergeometric', 'laplace', 'logistic', 'lognormal',
-                         'multinomial', 'negative_binomial', 'normal', 'pareto',
-                         'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
-
 """
 Basic OB patient flow model
 
@@ -63,24 +58,20 @@ class OBsystem(object):
     Purpose:
 
     - acts as a container for the collection of units
-    - acts as a container for the global variables
     - acts as a container for the timestamps dictionaries
 
     Instead of passing around the above individually, just pass this system object around
 
     """
 
-    def __init__(self, env: 'Environment', locations: Dict, global_vars: Dict):
+    def __init__(self, env: 'Environment', locations: Dict, los_distributions: Dict):
         self.env = env
+        self.los_distributions = los_distributions
 
         # Create units container and individual patient care units
-        self.obunits = []
-        # Unit index in obunits list should correspond to Unit enum value
-        for location in locations:
-            self.obunits.append(OBunit(env, unit_id=location, name=locations[location]['name'],
-                                       capacity=locations[location]['capacity']))
-
-        self.global_vars = global_vars
+        self.obunits = {}
+        for location, data in locations.items():
+            self.obunits[location] = OBunit(env, name=location, capacity=data['capacity'])
 
         # Create list to hold timestamps dictionaries (one per patient stop)
         self.patient_timestamps_list = []
@@ -120,16 +111,16 @@ class PatientType(IntEnum):
     RAND_NONDELIV_PP = 11
 
 
-class OBunitId(IntEnum):
-    ENTRY = 0
-    OBS = 1
-    LDR = 2
-    CSECT = 3
-    PP = 4
-    LDRP = 5
-    LD = 6
-    RECOVERY = 8
-    EXIT = 8
+# class OBunitId(IntEnum):
+#     ENTRY = 0
+#     OBS = 1
+#     LDR = 2
+#     CSECT = 3
+#     PP = 4
+#     LDRP = 5
+#     LD = 6
+#     RECOVERY = 8
+#     EXIT = 8
 
 
 class OBunit(object):
@@ -146,10 +137,9 @@ class OBunit(object):
 
     """
 
-    def __init__(self, env: 'Environment', unit_id: int, name: str, capacity: int = simpy.core.Infinity):
+    def __init__(self, env: 'Environment', name: str, capacity: int = simpy.core.Infinity):
 
         self.env = env
-        self.id = unit_id
         self.name = name
         self.capacity = capacity
 
@@ -207,7 +197,7 @@ class OBunit(object):
         obpatient.entry_ts[obpatient.current_stop_num] = self.env.now
         obpatient.wait_to_enter[obpatient.current_stop_num] = \
             self.env.now - obpatient.request_entry_ts[obpatient.current_stop_num]
-        obpatient.current_unit_id = self.id
+        obpatient.current_unit_id = self.name
 
         self.num_entries += 1
         self.last_entry = self.env.now
@@ -255,7 +245,7 @@ class OBunit(object):
         yield self.env.timeout(adj_los)
 
         # Go to next destination (which could be an exitflow)
-        if obpatient.current_unit_id == OBunitId.EXIT:
+        if obpatient.current_unit_id == 'EXIT':
             obpatient.previous_unit_id = obpatient.unit_stops[obpatient.current_stop_num]
             previous_unit = obsystem.obunits[obpatient.previous_unit_id]
             previous_request = obpatient.bed_requests[obpatient.current_stop_num]
@@ -327,7 +317,6 @@ class OBPatient(object):
         """
         self.system_arrival_ts = arr_time
         self.patient_id = patient_id
-        self.router = router
 
         # Determine patient type
         # TODO: Generalize for full patient type scheme
@@ -355,14 +344,10 @@ class OBPatient(object):
         self.adjusted_los = [None for _ in range(self.route_length)]
         self.request_entry_ts = [None for _ in range(self.route_length)]
         self.entry_ts = [None for _ in range(self.route_length)]
-
         self.wait_to_enter = [None for _ in range(self.route_length)]
-
         self.request_exit_ts = [None for _ in range(self.route_length)]
         self.exit_ts = [None for _ in range(self.route_length)]
-
         self.wait_to_exit = [None for _ in range(self.route_length)]
-
         self.system_exit_ts = None
 
     def exit_system(self, env, obsystem):
@@ -371,7 +356,7 @@ class OBPatient(object):
 
         # Create dictionaries of timestamps for patient_stop log
         for stop in range(len(self.unit_stops)):
-            if obpatient.unit_stops[stop] is not None:
+            if self.unit_stops[stop] is not None:
                 timestamps = {'patient_id': self.patient_id,
                               'patient_type': self.patient_type.value,
                               'unit': OBunitId(self.unit_stops[stop]).name,
@@ -423,20 +408,21 @@ class OBStaticRouter(object):
             route_graph = nx.DiGraph()
 
             # Add each unit number as a node
-            for loc_num, location in locations.items():
-                route_graph.add_node(location['id'], id=location['id'],
+            for location, data in locations.items():
+                route_graph.add_node(location,
                                      planned_los=0.0, actual_los=0.0, blocked_duration=0.0,
-                                     name=location['name'])
+                                     name=data['name'])
 
             # Add edges - simple serial route in this case
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
 
-            # Each patient will eventually end up with their own copy of the route since it will contain LOS values
+            # Each patient will eventually end up with their own copy of the route since
+            # it will contain LOS values
             self.route_graphs[route_num] = route_graph.copy()
             logging.debug(f"{self.env.now:.4f}:route graph {route_num} - {route_graph.edges}")
 
-    def create_route(self, patient_type):
+    def create_route(self, patient_type, los_distributions):
         """
 
         Parameters
@@ -448,43 +434,22 @@ class OBStaticRouter(object):
 
         Notes
         -----
-        TODO: Lots of hard coded LOS distribution elements in here
 
         """
 
         # Copy the route template to create new graph object
         route_graph = deepcopy(self.route_graphs[patient_type])
 
-        # Pull out the LOS parameters for convenience
-        k_obs = self.obsystem.global_vars['num_erlang_stages_obs']
-        mean_los_obs = self.obsystem.global_vars['mean_los_obs']
-        k_ldr = self.obsystem.global_vars['num_erlang_stages_ldr']
-        mean_los_ldr = self.obsystem.global_vars['mean_los_ldr']
-        k_pp = self.obsystem.global_vars['num_erlang_stages_pp']
-        mean_los_pp_noc = self.obsystem.global_vars['mean_los_pp_noc']
-        mean_los_pp_c = self.obsystem.global_vars['mean_los_pp_c']
-
-        # Generate the random planned LOS values by patient type
-        if patient_type == PatientType.RAND_SPONT_REG:
-            route_graph.nodes[OBunitId.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
-            route_graph.nodes[OBunitId.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
-            route_graph.nodes[OBunitId.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_noc / k_pp)
-
-        elif patient_type == PatientType.RAND_SPONT_CSECT:
-            k_csect = self.obsystem.global_vars['num_erlang_stages_csect']
-            mean_los_csect = self.obsystem.global_vars['mean_los_csect']
-
-            route_graph.nodes[OBunitId.OBS]['planned_los'] = self.rg.gamma(k_obs, mean_los_obs / k_obs)
-            route_graph.nodes[OBunitId.LDR]['planned_los'] = self.rg.gamma(k_ldr, mean_los_ldr / k_ldr)
-            route_graph.nodes[OBunitId.CSECT]['planned_los'] = self.rg.gamma(k_csect, mean_los_csect / k_csect)
-            route_graph.nodes[OBunitId.PP]['planned_los'] = self.rg.gamma(k_pp, mean_los_pp_c / k_pp)
+        # Sample from los distributions for planned_los
+        for unit, data in route_graph.nodes(data=True):
+            route_graph.nodes[unit]['planned_los'] = los_distributions[patient_type][unit]
 
         return route_graph
 
     def get_next_unit_id(self, obpatient):
 
         G = obpatient.route_graph
-        successors = [G.nodes(data='id')[n] for n in G.successors(obpatient.current_unit_id)]
+        successors = [G.nodes(data='name')[n] for n in G.successors(obpatient.current_unit_id)]
         next_unit_id = successors[0]
 
         if next_unit_id is None:
@@ -589,12 +554,12 @@ def process_command_line(argv=None):
     return args
 
 
-def simulate(sim_inputs, rep_num):
+def simulate(config, rep_num):
     """
 
     Parameters
     ----------
-    sim_inputs : dict whose keys are the simulation input args
+    config : dict whose keys are the simulation input args
     rep_num : int, simulation replication number
 
     Returns
@@ -603,16 +568,23 @@ def simulate(sim_inputs, rep_num):
 
     """
 
-    scenario = sim_inputs['scenario']
+    scenario = config['scenario']
 
-    run_settings = sim_inputs['run_settings']
-    run_time = run_settings['run_time']
-    warmup_time = run_settings['warmup_time']
-    global_vars = sim_inputs['global_vars']
-    output = sim_inputs['output']
-    random_number_streams = sim_inputs['random_number_streams']
-    locations = sim_inputs['locations']
-    routes = sim_inputs['routes']
+    run_time = config['run_settings']['run_time']
+    warmup_time = config['run_settings']['warmup_time']
+
+    # Create random number generators
+    random_number_streams = config['random_number_streams']
+    rg = {}
+    for stream, seed in random_number_streams.items():
+        rg[stream] = default_rng(seed + rep_num - 1)
+
+    los_params = config['los_params']
+    los_distributions = obio.create_los_partials(config['los_distributions'], los_params)
+
+    locations = config['locations']
+    routes = config['routes']
+    output = config['output']
 
     # Setup output paths
     stats = output.keys()
@@ -626,12 +598,7 @@ def simulate(sim_inputs, rep_num):
     env = simpy.Environment()
 
     # Create an OB System
-    obsystem = OBsystem(env, locations, global_vars)
-
-    # Create random number generators
-    rg = {}
-    for stream, seed in random_number_streams.items():
-        rg[stream] = default_rng(seed + rep_num - 1)
+    obsystem = OBsystem(env, locations, los_distributions)
 
     # Create router
     router = OBStaticRouter(env, obsystem, locations, routes, rg['los'])
@@ -719,18 +686,17 @@ def main(argv=None):
     # Parse command line arguments
     args = process_command_line(argv)
 
-    # Load scenario configuration file
-    config = obio.load_config(args.config)
-
     # Quick setup of root logger
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         stream=sys.stdout,
     )
-
     # Retrieve root logger (no logger name passed to ``getLogger()``) and update its level
     logger = logging.getLogger()
     logger.setLevel(args.loglevel)
+
+    # Load scenario configuration file
+    config = obio.load_config(args.config)
 
     num_replications = config['run_settings']['num_replications']
 

@@ -94,19 +94,14 @@ Network representation
 }
 
 
-Staffing resources
--------------------
 
-No staffing within model. Post-process occupancy log or stop log.
-
-This post by jprayson describes a grocery store staffing approach:
-https://groups.google.com/g/python-simpy/c/m6ogUwIWtMU
 
 
 Router design
 --------------
 
 Where to do LOS assignment?
+Should we assign entire route at time of patient creation?
 
 
 
@@ -143,6 +138,14 @@ SimPy docs have some tracing examples that require monkey patching
 https://docs.python.org/3/library/logging.html
 
 https://bitbucket.org/snippets/benhowes/MKLXy/simpy30-fridge
+
+Staffing resources
+-------------------
+
+No staffing within model. Post-process occupancy log or stop log.
+
+This post by jprayson describes a grocery store staffing approach:
+https://groups.google.com/g/python-simpy/c/m6ogUwIWtMU
 
 Software Project Mgt
 ====================

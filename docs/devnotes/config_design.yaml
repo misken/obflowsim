@@ -43,22 +43,17 @@ los_distributions:
 locations:
   ENTRY:
     capacity: 1000
-    name: ENTRY
   OBS:
     capacity: 100
-    name: OBS
   LDR:
     capacity: 16
-    name: LDR
   CSECT:
     capacity: 1000
-    name: CSECT
   PP:
     capacity: 36
-    name: PP
   EXIT:
     capacity: 1000
-    name: EXIT
+
     
 
 random_number_streams:
