@@ -211,7 +211,7 @@ class OBunit:
         """
         obpatient.current_stop_num += 1
         logging.debug(
-            f"{obpatient.patient_id} trying to get {self.name} at {self.env.now:.4f} for stop_num {obpatient.current_stop_num}")
+            f"{self.env.now:.4f}: {obpatient.patient_id} trying to get {self.name} for stop_num {obpatient.current_stop_num}")
 
         # Timestamp of request time
         bed_request_ts = self.env.now
@@ -262,9 +262,9 @@ class OBunit:
             # Decrement occupancy in previous unit since bed now released
             previous_unit.dec_occ()
 
-        logging.debug(f"{self.env.now:.4f}:{obpatient.patient_id} entering {self.name} at {self.env.now:.4f}")
+        logging.debug(f"{self.env.now:.4f}: {obpatient.patient_id} entering {self.name}")
         logging.debug(
-            f"{self.env.now:.4f}:{obpatient.patient_id} waited {self.env.now - bed_request_ts:.4f} time units for {self.name} bed")
+            f"{self.env.now:.4f}: {obpatient.patient_id} waited {self.env.now - bed_request_ts:.4f} time units for {self.name} bed")
 
         # Generate los
         # TODO: Modeling discharge timing
@@ -385,7 +385,7 @@ class OBPatient:
     def exit_system(self, env, obsystem):
 
         logging.debug(
-            f"{env.now:.4f}:Patient {self.patient_id} exited system at {env.now:.2f}.")
+            f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
 
         # Create dictionaries of timestamps for patient_stop log
         for stop in range(len(self.unit_stops)):
@@ -458,7 +458,7 @@ class OBStaticRouter(object):
             # Each patient will eventually end up with their own copy of the route since
             # it will contain LOS values
             self.route_graphs[route_name] = route_graph.copy()
-            logging.debug(f"{self.env.now:.4f}:route graph {route_name} - {route_graph.edges}")
+            logging.debug(f"{self.env.now:.4f}: route graph {route_name} - {route_graph.edges}")
 
     def create_route(self, patient_type, los_distributions):
         """
@@ -494,11 +494,11 @@ class OBStaticRouter(object):
         next_unit_id = successors[0]
 
         if next_unit_id is None:
-            logging.error(f"{self.env.now:.4f}:{obpatient.patient_id} has no next unit at {obpatient.current_unit_id}.")
+            logging.error(f"{self.env.now:.4f}: {obpatient.patient_id} has no next unit at {obpatient.current_unit_id}.")
             exit(1)
 
         logging.debug(
-            f"{self.env.now:.4f}:{obpatient.patient_id} current_unit_id {obpatient.current_unit_id}, next_unit_id {next_unit_id}")
+            f"{self.env.now:.4f}: {obpatient.patient_id} current_unit_id {obpatient.current_unit_id}, next_unit_id {next_unit_id}")
         return next_unit_id
 
 
@@ -562,7 +562,7 @@ class OBPatientGeneratorPoisson:
             obpatient = OBPatient(
                 new_patient_id, patient_type, self.env.now, self.router, config.los_distributions)
 
-            logging.debug(f"{self.env.now:.4f}:Patient {obpatient.patient_id} created at {self.env.now:.4f}.")
+            logging.debug(f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f}.")
 
             # Initiate process of patient entering system
             self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
