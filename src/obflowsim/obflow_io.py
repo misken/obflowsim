@@ -32,6 +32,7 @@ ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma'
                          'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
 
 
+
 def load_config(cfg):
     """
 
@@ -51,11 +52,24 @@ def load_config(cfg):
     return yaml_config
 
 
-def create_los_partials(raw_los_dists: Dict, los_params: Dict):
+def get_args_and_kwargs(*args, **kwargs):
+    return args, kwargs
+
+
+def convert_str_to_args_and_kwargs(s):
+    return eval(s.replace(s[:s.find('(')], 'get_args_and_kwargs'))
+
+
+def convert_str_to_func_name(s):
+    return s[:s.find('(')]
+
+
+def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     """
 
     Parameters
     ----------
+    rg
     raw_los_dist: Dict
     los_params: Dict
 
@@ -70,15 +84,6 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict):
     for param in los_params:
         los_dists_str_json = los_dists_str_json.replace(param, str(los_params[param]))
     los_dists_instantiated = json.loads(los_dists_str_json)
-
-    def get_args_and_kwargs(*args, **kwargs):
-        return args, kwargs
-
-    def convert_str_to_args_and_kwargs(s):
-        return eval(s.replace(s[:s.find('(')], 'get_args_and_kwargs'))
-
-    def convert_str_to_func_name(s):
-        return s[:s.find('(')]
 
     los_dists_partials = copy.deepcopy(los_dists_instantiated)
     for key_pat_type in los_dists_partials:

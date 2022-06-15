@@ -94,7 +94,12 @@ Network representation
 }
 
 
+Length of stay modeling
+-------------------------
 
+Currently just doing standard real number los generation. If we are
+interested in TOD stats, need to implement TOD adjustment to model
+discharge timing.
 
 
 Router design
