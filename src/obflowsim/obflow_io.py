@@ -52,6 +52,14 @@ def load_config(cfg):
     return yaml_config
 
 
+def read_arrivals_sched_c(filename):
+    """
+    Read 7x24 tab delimited file of scheduled c-section arrivals
+    """
+
+    sched_c_arrivals = np.loadtxt(filename, int)
+    return sched_c_arrivals
+
 def get_args_and_kwargs(*args, **kwargs):
     return args, kwargs
 
