@@ -64,10 +64,29 @@ These are for the urgent inductions
 
 Poisson arrivals - stationary and non-stationary versions
 
+For stationary Poisson arrivals, implemented a ``OBPatientGeneratorPoisson``
+class that samples from an exponential distribution at the specified
+rate to generate interarrival times. Upon each "arrival" a new ``OBPatient``
+object gets created.
+
 Scheduled arrivals
 ^^^^^^^^^^^^^^^^^^^
 
 Scheduled inductions and scheduled c-sections
+
+For this, we need the notion of a calendar. 
+
+    - include a ``start_date`` parameter in config file
+    - can do datetime math to convert ``simpy.env.now`` to calendar datetime.
+    
+For the schedule itself, need way of filling weekly scheduling template at
+some user specified density level and then generating patients each week
+that wait in ENTRY until their scheduled procedure time to show up to the first
+unit location after ENTRY.
+
+
+
+
 
 Input config file design
 ---------------------------

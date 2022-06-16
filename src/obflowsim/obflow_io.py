@@ -99,6 +99,18 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
 
     return los_dists_partials
 
+def setup_output_paths(config, rep_num):
+    stats = config.output.keys()
+    config.paths = {stat: None for stat in stats}
+    for stat in stats:
+        if config.output[stat]['write']:
+            Path(config.output[stat]['path']).mkdir(parents=True, exist_ok=True)
+            config.paths[stat] = Path(
+                config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
+
+    return config
+
+
 
 def write_stop_log(csv_path, obsystem, egress=True):
     """

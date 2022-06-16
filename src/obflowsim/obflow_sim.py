@@ -59,7 +59,7 @@ Key Lessons Learned:
 """
 
 
-class Config:
+class OBConfig:
     """
 
     """
@@ -93,6 +93,33 @@ class Config:
         # self.paths = config['paths']
         self.output = config['output']
 
+        # Calendar related
+        self.start_date = pd.Timestamp(config['run_settings']['start_date'])
+        self.base_time_unit = config['run_settings']['base_time_unit']
+
+class SimCalendar:
+    """
+
+    """
+
+    def __init__(self, env: 'Environment', config: OBConfig):
+        self.env = env
+        self.start_date = config.start_date
+        self.base_time_unit = config.base_time_unit
+
+    def now(self):
+        return self.to_sim_calendar_time(self.env.now)
+
+    def to_sim_calendar_time(self, sim_time):
+        elapsed_timedelta = pd.to_timedelta(sim_time, unit=self.base_time_unit)
+        return self.start_date + elapsed_timedelta
+
+    def to_sim_time(self, sim_calendar_time):
+        elapsed_timedelta = sim_calendar_time - self.start_date
+        return elapsed_timedelta / pd.to_timedelta(1, unit=self.base_time_unit)
+
+
+
 
 class OBsystem:
     """
@@ -105,8 +132,10 @@ class OBsystem:
 
     """
 
-    def __init__(self, env: 'Environment', locations: Dict, los_distributions: Dict):
+    def __init__(self, env: 'Environment', locations: Dict, los_distributions: Dict,
+                 sim_calendar: SimCalendar):
         self.env = env
+        self.sim_calendar = sim_calendar
         self.los_distributions = los_distributions
 
         # Create units container and individual patient care units
@@ -562,7 +591,7 @@ class OBPatientGeneratorPoisson:
             obpatient = OBPatient(
                 new_patient_id, patient_type, self.env.now, self.router, config.los_distributions)
 
-            logging.debug(f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f}.")
+            logging.debug(f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
 
             # Initiate process of patient entering system
             self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
@@ -624,7 +653,8 @@ def simulate(config_dict, rep_num):
 
     """
 
-    config = Config(config_dict, rep_num)
+    config = OBConfig(config_dict, rep_num)
+
     if hasattr(config, 'max_arrivals'):
         max_arrivals = config.max_arrivals
     else:
@@ -636,19 +666,14 @@ def simulate(config_dict, rep_num):
         run_time = simpy.core.Infinity
 
     # Setup output paths
-    stats = config.output.keys()
-    config.paths = {stat: None for stat in stats}
-    for stat in stats:
-        if config.output[stat]['write']:
-            Path(config.output[stat]['path']).mkdir(parents=True, exist_ok=True)
-            config.paths[stat] = Path(
-                config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
+    config = obio.setup_output_paths(config, rep_num)
 
     # Initialize a simulation environment
     env = simpy.Environment()
+    sim_calendar = SimCalendar(env, config)
 
     # Create an OB System
-    obsystem = OBsystem(env, config.locations, config.los_distributions)
+    obsystem = OBsystem(env, config.locations, config.los_distributions, sim_calendar)
 
     # Create router
     router = OBStaticRouter(env, obsystem, config.locations, config.routes, config.rg['los'])
@@ -678,7 +703,7 @@ def simulate(config_dict, rep_num):
     # print(f"rho_obs: {rho_obs:6.3f}\nrho_ldr: {rho_ldr:6.3f}\nrho_pp: {rho_pp:6.3f}")
 
     # Patient generator stats
-    header = obio.output_header("Patient generator and entry/exit stats", 50, config.scenario, rep_num)
+    header = obio.output_header("Patient generator and entry/exit stats", 70, config.scenario, rep_num)
     print(header)
     print("Num patients generated: {}\n".format(patient_generator_spont_labor.num_patients_created))
 
@@ -701,8 +726,8 @@ def simulate(config_dict, rep_num):
         print(f"Occupancy stats written to {config.paths['occ_stats']}")
 
     if config.paths['occ_logs'] is not None:
-        obio.write_occ_log(config.paths['occ_log'], occ_log_df)
-        print(f"Occupancy log written to {config.paths['occ_log']}")
+        obio.write_occ_log(config.paths['occ_logs'], occ_log_df)
+        print(f"Occupancy log written to {config.paths['occ_logs']}")
 
     if config.paths['stop_logs'] is not None:
         obio.write_stop_log(config.paths['stop_logs'], obsystem)
