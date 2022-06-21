@@ -1,34 +1,54 @@
 scenario: 1
 
+# A rate of 0.0 will shut off the arrival stream
 rand_arrival_rates:
     spont_labor: 0.20
     urgent_induced_labor: 0.00
-    non_delivery_ldr: 0.00
-    non_delivery_pp: 0.00
-    
+    non_delivery_ldr: 0.05
+    non_delivery_pp: 0.05
+
+# 1=on, 0=off    
+rand_arrival_toggles:
+    spont_labor: 1
+    urgent_induced_labor: 0
+    non_delivery_ldr: 0
+    non_delivery_pp: 0
+
+# A filename of '' (empty string) will shut off arrival stream    
 schedule_files:
     sched_csect: ./input/sched_c.txt
     sched_induced_labor: ./input/sched_induction.txt
 
+# 1=on, 0=off    
+rand_arrival_toggles:
+    sched_csect: 0
+    sched_induced_labor: 0
+
 branching_probabilities:
-    pct_c_sect: 0.25
     pct_spont_labor_aug: 0.4
     pct_spont_labor_to_c: 0.4
     pct_aug_labor_to_c: 0.06
     pct_sched_ind_to_c: 0.12
     pct_urg_ind_to_c: 0.12
 
+# You can define input parameters to be used on los_distributions section
 los_params:
     mean_los_csect: 1.0
     mean_los_ldr: 12.0
     mean_los_obs: 2.4
     mean_los_pp_c: 72.0
     mean_los_pp_noc: 48.0
+    mean_los_ldr_nondelivery: 36.0
+    mean_los_pp_nondelivery: 48.0
     num_erlang_stages_csect: 4
     num_erlang_stages_ldr: 2
     num_erlang_stages_obs: 1
     num_erlang_stages_pp: 8
-  
+    num_erlang_stages_ldr_nondelivery: 2
+    num_erlang_stages_pp_nondelivery: 4
+
+# You can use a restricted set of numpy distributions parameterized via
+# constants are user defined parameters in the los_params section.  
 los_distributions:
     RAND_SPONT_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
@@ -58,6 +78,10 @@ los_distributions:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    RAND_NONDELIV_LD:
+        LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+    RAND_NONDELIV_PP:
+        PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
 
 

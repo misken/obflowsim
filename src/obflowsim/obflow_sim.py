@@ -76,6 +76,7 @@ class OBConfig:
 
         # Arrival rates
         self.rand_arrival_rates = config['rand_arrival_rates']
+        self.rand_arrival_toggles = config['rand_arrival_toggles']
 
         # Schedules
         self.schedules = {}
@@ -185,6 +186,18 @@ class PatientType(Enum):
     URGENT_IND_CSECT = 9
     RAND_NONDELIV_LD = 10
     RAND_NONDELIV_PP = 11
+
+
+class ArrivalType(Enum):
+    """
+
+    """
+    SPONT_LABOR = 'spont_labor'
+    URGENT_INDUCED_LABOR = 'urgent_induced_labor'
+    NON_DELIVERY_LDR = 'non_delivery_ldr'
+    NON_DELIVERY_PP = 'non_delivery_pp'
+    SCHED_CSECT = 'sched_csect'
+    SCHED_INDUCED_LABOR = 'sched_induced_labor'
 
 
 # class OBunitId(IntEnum):
@@ -380,7 +393,7 @@ class OBPatient:
 
     """
 
-    def __init__(self, patient_id, patient_type, arr_time,
+    def __init__(self, patient_id, patient_type, arr_type, arr_time,
                  router, los_distributions, entry_delay=0):
         """
 
@@ -391,6 +404,7 @@ class OBPatient:
         self.system_arrival_ts = arr_time
         self.patient_id = patient_id
         self.patient_type = patient_type
+        self.arr_type = arr_type
         self.router = router
         self.entry_delay = entry_delay
 
@@ -430,6 +444,7 @@ class OBPatient:
                 # noinspection PyUnresolvedReferences
                 timestamps = {'patient_id': self.patient_id,
                               'patient_type': self.patient_type,
+                              'arrival_type': self.arr_type,
                               'unit': self.unit_stops[stop],
                               'request_entry_ts': self.request_entry_ts[stop],
                               'entry_ts': self.entry_ts[stop],
@@ -603,7 +618,8 @@ class OBPatientGeneratorPoisson:
             new_patient_id = f'{patient_type}_{self.num_patients_created}'
             # Create new patient
             obpatient = OBPatient(
-                new_patient_id, patient_type, self.env.now, self.router, self.config.los_distributions)
+                new_patient_id, patient_type, self.uid, self.env.now, self.router,
+                self.config.los_distributions)
 
             logging.debug(
                 f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
@@ -612,22 +628,32 @@ class OBPatientGeneratorPoisson:
             self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
 
     def assign_patient_type(self):
-        # Determine if labor augmented or not
-        if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_aug']:
-            # Augmented labor
-            if self.arr_stream_rg.random() < self.config.branching_probs['pct_aug_labor_to_c']:
-                return PatientType.RAND_AUG_CSECT.value
+        if self.uid == ArrivalType.SPONT_LABOR.value:
+            # Determine if labor augmented or not
+            if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_aug']:
+                # Augmented labor
+                if self.arr_stream_rg.random() < self.config.branching_probs['pct_aug_labor_to_c']:
+                    return PatientType.RAND_AUG_CSECT.value
+                else:
+                    return PatientType.RAND_AUG_REG.value
             else:
-                return PatientType.RAND_AUG_REG.value
-        else:
-            # Labor not augmented
-            if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_to_c']:
-                return PatientType.RAND_SPONT_CSECT.value
+                # Labor not augmented
+                if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_to_c']:
+                    return PatientType.RAND_SPONT_CSECT.value
+                else:
+                    return PatientType.RAND_SPONT_REG.value
+        elif self.uid == ArrivalType.NON_DELIVERY_LDR.value:
+            return PatientType.RAND_NONDELIV_LD
+        elif self.uid == ArrivalType.NON_DELIVERY_PP.value:
+            return PatientType.RAND_NONDELIV_PP
+        elif self.uid == ArrivalType.URGENT_INDUCED_LABOR.value:
+            if self.arr_stream_rg.random() < self.config.branching_probs['pct_urg_ind_to_c']:
+                return PatientType.URGENT_IND_CSECT.value
             else:
-                return PatientType.RAND_SPONT_REG.value
+                return PatientType.URGENT_IND_REG.value
 
 
-class OBPatientGeneratorWeeklySchedule:
+class OBPatientGeneratorWeeklyStaticSchedule:
     """ Generates patients according to a repeating one week schedule
 
         Parameters
@@ -647,7 +673,7 @@ class OBPatientGeneratorWeeklySchedule:
 
     """
 
-    def __init__(self, uid:Union[str, int], env: 'Environment',
+    def __init__(self, uid: Union[str, int], env: 'Environment',
                  config: OBConfig, obsystem: OBsystem,
                  router: OBStaticRouter, schedule: NDArray,
                  arr_stream_rg: DTypeLike,
@@ -678,18 +704,22 @@ class OBPatientGeneratorWeeklySchedule:
         while self.env.now < self.stop_time and \
                 self.num_patients_created < self.max_arrivals:
 
+            # Create tuples (day, hour, num scheduled)
             arrival_epochs = [(d, h, self.schedule[d, h]) for d in range(6)
                               for h in range(23) if self.schedule[d, h] > 0]
 
+            # Create schedule patients and send them to ENTRY to wait until their scheduled procedure time
             for (day, hour, num_sched) in arrival_epochs:
-                time_of_week = pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=self.config.base_time_unit)
+                # Compute number of time units from the start of current week until scheduled procedure time
+                time_of_week = \
+                    pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=self.config.base_time_unit)
                 for patient in range(num_sched):
                     self.num_patients_created += 1
                     patient_type = self.assign_patient_type()
                     new_patient_id = f'{patient_type}_{self.num_patients_created}'
                     # Create new patient
                     obpatient = OBPatient(
-                        new_patient_id, patient_type, self.env.now, self.router,
+                        new_patient_id, patient_type, self.uid, self.env.now, self.router,
                         self.config.los_distributions, entry_delay=time_of_week)
 
                     logging.debug(
@@ -698,16 +728,16 @@ class OBPatientGeneratorWeeklySchedule:
                     # Initiate process of patient entering system
                     self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
 
-            # Compute next weekly cycle time
+            # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)
 
     def assign_patient_type(self):
-        # Determine if labor augmented or not
-        if self.uid == 'sched_csect':
+        # Determine if scheduled c-section or scheduled induction
+        if self.uid == ArrivalType.SCHED_CSECT.value:
             # Scheduled c-section
             return PatientType.SCHED_CSECT.value
         else:
-            # Determine if induction ends up with c-section
+            # Determine if scheduled induction ends up with c-section
             if self.arr_stream_rg.random() < self.config.branching_probs['pct_sched_ind_to_c']:
                 return PatientType.SCHED_IND_CSECT.value
             else:
@@ -780,21 +810,25 @@ def simulate(config_dict, rep_num):
     # Create router
     router = OBStaticRouter(env, obsystem, config.routes, config.rg['los'])
 
-    # Create patient generator for random arrivals
-    patient_generator_spont_labor = \
-        OBPatientGeneratorPoisson(
-            'spont_labor', env, config, obsystem, router,
-            config.rand_arrival_rates['spont_labor'], config.rg['arrivals'],
-            stop_time=run_time, max_arrivals=max_arrivals)
+    # Create patient generator for random arrivals in spont labor
+    patient_generators_poisson = {}
+    for poisson_id, arr_rate in config.rand_arrival_rates.items():
+        if arr_rate > 0.0 and config.rand_arrival_toggles[poisson_id] > 0:
+            patient_generators_poisson[poisson_id] = \
+                OBPatientGeneratorPoisson(
+                    poisson_id, env, config, obsystem, router,
+                    config.rand_arrival_rates[poisson_id], config.rg['arrivals'],
+                    stop_time=run_time, max_arrivals=max_arrivals)
 
-    # Create patient generator for scheduled c-sections
+    # Create patient generator for scheduled c-sections and scheduled inductions
     patient_generators_scheduled = {}
     for sched_id, schedule in config.schedules.items():
-        patient_generators_scheduled[sched_id] = \
-            OBPatientGeneratorWeeklySchedule(
-                sched_id, env, config, obsystem, router,
-                config.schedules[sched_id], config.rg['arrivals'],
-                stop_time=run_time, max_arrivals=max_arrivals)
+        if len(schedule) > 0:
+            patient_generators_scheduled[sched_id] = \
+                OBPatientGeneratorWeeklyStaticSchedule(
+                    sched_id, env, config, obsystem, router,
+                    config.schedules[sched_id], config.rg['arrivals'],
+                    stop_time=run_time, max_arrivals=max_arrivals)
 
     # Run the simulation replication
     env.run(until=config.run_time)

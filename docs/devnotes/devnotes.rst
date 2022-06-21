@@ -80,9 +80,25 @@ For this, we need the notion of a calendar.
     - can do datetime math to convert ``simpy.env.now`` to calendar datetime.
     
 For the schedule itself, need way of filling weekly scheduling template at
-some user specified density level and then generating patients each week
+some user specified density level (or other approach) and then generating patients each week
 that wait in ENTRY until their scheduled procedure time to show up to the first
 unit location after ENTRY.
+
+For now, I've implemented a static one week scheduling template for
+C-sections and another for inductions. 
+
+Per conversation with TJW (2022-06-21):
+    - scheduled C-sections happen no further than ~6 weeks out. Once scheduled,
+    it's a high likelihood that it will occur on scheduled date.
+    - scheduled inductions happen no further than 2-3 weeks out. More 
+    uncertainty as to whether or not the induction will happen since
+    mom could go into labor prior to scheduled induction date.
+    - when modeling schedule filling dynamics, want the ability to model
+    different scheduling practices. For example, a simple approach would be
+    to open up entire template and let people schedule procedures anywhere
+    in the template with capacity. In order to encourage occupancy smoothing,
+    a better approach may be to open additional capacity in phases as you
+    schedule becomes fuller.
 
 
 
@@ -125,6 +141,8 @@ Router design
 --------------
 
 Where to do LOS assignment?
+    - happening in create_route
+
 Should we assign entire route at time of patient creation?
 
 
