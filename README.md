@@ -1,4 +1,7 @@
-# obflowsim - a research project
+# obflowsim - a flexible discrete event simulation model for inpatient obstetric flows
+
+**IMPORTANT** The OB patient flow simulation metamodeling research project formerly residing in this repo has
+moved to its new home at [obflowsim-mm](https://github.com/misken/obflowsim-mm).
 
 
 The obflowsim Python package is a discrete event simulation model built with
