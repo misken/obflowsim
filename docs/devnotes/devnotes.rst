@@ -181,6 +181,22 @@ https://docs.python.org/3/library/logging.html
 
 https://bitbucket.org/snippets/benhowes/MKLXy/simpy30-fridge
 
+https://guicommits.com/how-to-log-in-python-like-a-pro/
+
+Strong opinions on how to do logging - https://www.palkeo.com/en/blog/python-logging.html
+The ``extra=<dict>`` param lets you add contextual info to log message.
+
+Loguru - builds on top of standing logging module - https://github.com/Delgan/loguru
+    - uses notion of sinks which seem to be used in simulation tracing
+    - adds a TRACE level
+    
+structlog is another option for structured logging (dicts instead of just string messages)
+    
+https://opentelemetry.io/docs/instrumentation/python/
+
+
+
+
 Staffing resources
 -------------------
 

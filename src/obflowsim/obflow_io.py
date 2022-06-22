@@ -32,7 +32,6 @@ ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma'
                          'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
 
 
-
 def load_config(cfg):
     """
 
@@ -52,13 +51,13 @@ def load_config(cfg):
     return yaml_config
 
 
-def read_arrivals_sched_c(filename):
-    """
-    Read 7x24 tab delimited file of scheduled c-section arrivals
-    """
-
-    sched_c_arrivals = np.loadtxt(filename, int)
-    return sched_c_arrivals
+# def read_arrivals_sched_c(filename):
+#     """
+#     Read 7x24 tab delimited file of scheduled c-section arrivals
+#     """
+#
+#     sched_c_arrivals = np.loadtxt(filename, int)
+#     return sched_c_arrivals
 
 def get_args_and_kwargs(*args, **kwargs):
     return args, kwargs
@@ -89,8 +88,13 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
 
     # Replace all los_param use with literal values
     los_dists_str_json = json.dumps(raw_los_dists)
-    for param in los_params:
+
+    los_params_sorted = [key for key in los_params]
+    los_params_sorted.sort(key=len, reverse=True)
+
+    for param in los_params_sorted:
         los_dists_str_json = los_dists_str_json.replace(param, str(los_params[param]))
+
     los_dists_instantiated = json.loads(los_dists_str_json)
 
     los_dists_partials = copy.deepcopy(los_dists_instantiated)
@@ -107,6 +111,7 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
 
     return los_dists_partials
 
+
 def setup_output_paths(config, rep_num):
     stats = config.output.keys()
     config.paths = {stat: None for stat in stats}
@@ -117,7 +122,6 @@ def setup_output_paths(config, rep_num):
                 config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
 
     return config
-
 
 
 def write_stop_log(csv_path, obsystem, egress=True):

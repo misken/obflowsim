@@ -10,9 +10,9 @@ rand_arrival_rates:
 # 1=on, 0=off    
 rand_arrival_toggles:
     spont_labor: 1
-    urgent_induced_labor: 0
-    non_delivery_ldr: 0
-    non_delivery_pp: 0
+    urgent_induced_labor: 1
+    non_delivery_ldr: 1
+    non_delivery_pp: 1
 
 # A filename of '' (empty string) will shut off arrival stream    
 schedule_files:
@@ -20,7 +20,7 @@ schedule_files:
     sched_induced_labor: ./input/sched_induction.txt
 
 # 1=on, 0=off    
-rand_arrival_toggles:
+sched_arrival_toggles:
     sched_csect: 0
     sched_induced_labor: 0
 
@@ -78,7 +78,7 @@ los_distributions:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
-    RAND_NONDELIV_LD:
+    RAND_NONDELIV_LDR:
         LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
     RAND_NONDELIV_PP:
         PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
@@ -207,6 +207,22 @@ routes:
       to: PP
     - from: PP
       id: PP_EXIT
+      to: EXIT
+  RAND_NONDELIV_LDR:
+    edges:
+    - from: ENTRY
+      id: ENTRY_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_EXIT
+      to: EXIT
+  RAND_NONDELIV_PP:
+    edges:
+    - from: ENTRY
+      id: ENTRY_PP
+      to: PP
+    - from: PP
+      id: LDR_EXIT
       to: EXIT
 
     

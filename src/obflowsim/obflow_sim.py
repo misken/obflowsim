@@ -33,6 +33,9 @@ EXIT = 'EXIT'
 
 MAX_ARRIVALS = 1e+6
 
+# TODO - make sure all docstrings are complete
+# TODO - use type annotations (?)
+
 """
 Basic OB patient flow model
 
@@ -54,6 +57,8 @@ Key Lessons Learned:
   must get registered as a process.
 
 """
+
+
 
 
 class OBConfig:
@@ -87,6 +92,8 @@ class OBConfig:
         if 'sched_induced_labor' in config['schedule_files']:
             sched_file = config['schedule_files']['sched_induced_labor']
             self.schedules['sched_induced_labor'] = np.loadtxt(sched_file, dtype=int)
+
+        self.sched_arrival_toggles = config['sched_arrival_toggles']
 
         # Branching probabilities
         self.branching_probs = config['branching_probabilities']
@@ -182,10 +189,10 @@ class PatientType(Enum):
     SCHED_IND_REG = 'SCHED_IND_REG'
     SCHED_IND_CSECT = 'SCHED_IND_CSECT'
     SCHED_CSECT = 'SCHED_CSECT'
-    URGENT_IND_REG = 8
-    URGENT_IND_CSECT = 9
-    RAND_NONDELIV_LD = 10
-    RAND_NONDELIV_PP = 11
+    URGENT_IND_REG = 'URGENT_IND_REG'
+    URGENT_IND_CSECT = 'URGENT_IND_CSECT'
+    RAND_NONDELIV_LDR = 'RAND_NONDELIV_LDR'
+    RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
 
 
 class ArrivalType(Enum):
@@ -643,9 +650,9 @@ class OBPatientGeneratorPoisson:
                 else:
                     return PatientType.RAND_SPONT_REG.value
         elif self.uid == ArrivalType.NON_DELIVERY_LDR.value:
-            return PatientType.RAND_NONDELIV_LD
+            return PatientType.RAND_NONDELIV_LDR.value
         elif self.uid == ArrivalType.NON_DELIVERY_PP.value:
-            return PatientType.RAND_NONDELIV_PP
+            return PatientType.RAND_NONDELIV_PP.value
         elif self.uid == ArrivalType.URGENT_INDUCED_LABOR.value:
             if self.arr_stream_rg.random() < self.config.branching_probs['pct_urg_ind_to_c']:
                 return PatientType.URGENT_IND_CSECT.value
@@ -787,6 +794,20 @@ def simulate(config_dict, rep_num):
 
     config = OBConfig(config_dict, rep_num)
 
+    # TODO: Do basic traffic analysis using config object
+    # rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[OBunitId.OBS]['capacity']
+    # rho_ldr = global_vars['arrival_rate'] * global_vars['mean_los_ldr'] / locations[OBunitId.LDR]['capacity']
+    # mean_los_pp = global_vars['mean_los_pp_c'] * global_vars['c_sect_prob'] + \
+    #               global_vars['mean_los_pp_noc'] * (1 - global_vars['c_sect_prob'])
+    #
+    # rho_pp = global_vars['arrival_rate'] * mean_los_pp / locations[OBunitId.PP]['capacity']
+
+    # print(f"rho_obs: {rho_obs:6.3f}\n rho_ldr: {rho_ldr:6.3f}\n rho_pp: {rho_pp:6.3f}")
+    # Compute and display traffic intensities
+    # header = obio.output_header("Input traffic parameters", 50, config.scenario, rep_num)
+    # print(header)
+
+    # Determine stopping conditions specified in config file
     if hasattr(config, 'max_arrivals'):
         max_arrivals = config.max_arrivals
     else:
@@ -800,7 +821,7 @@ def simulate(config_dict, rep_num):
     # Setup output paths
     config = obio.setup_output_paths(config, rep_num)
 
-    # Initialize a simulation environment
+    # Initialize a simulation environment and calendar
     env = simpy.Environment()
     sim_calendar = SimCalendar(env, config)
 
@@ -810,7 +831,7 @@ def simulate(config_dict, rep_num):
     # Create router
     router = OBStaticRouter(env, obsystem, config.routes, config.rg['los'])
 
-    # Create patient generator for random arrivals in spont labor
+    # Create patient generators for random arrivals
     patient_generators_poisson = {}
     for poisson_id, arr_rate in config.rand_arrival_rates.items():
         if arr_rate > 0.0 and config.rand_arrival_toggles[poisson_id] > 0:
@@ -820,37 +841,32 @@ def simulate(config_dict, rep_num):
                     config.rand_arrival_rates[poisson_id], config.rg['arrivals'],
                     stop_time=run_time, max_arrivals=max_arrivals)
 
-    # Create patient generator for scheduled c-sections and scheduled inductions
+    # Create patient generators for scheduled c-sections and scheduled inductions
     patient_generators_scheduled = {}
     for sched_id, schedule in config.schedules.items():
-        if len(schedule) > 0:
+        if len(schedule) > 0 and config.sched_arrival_toggles[sched_id] > 0:
             patient_generators_scheduled[sched_id] = \
                 OBPatientGeneratorWeeklyStaticSchedule(
                     sched_id, env, config, obsystem, router,
                     config.schedules[sched_id], config.rg['arrivals'],
                     stop_time=run_time, max_arrivals=max_arrivals)
 
+    # TODO - create patient generator for urgent inductions. For now, we'll ignore these patient types.
+
     # Run the simulation replication
     env.run(until=config.run_time)
 
-    # Compute and display traffic intensities
-    # header = obio.output_header("Input traffic parameters", 50, config.scenario, rep_num)
-    # print(header)
-
-    # TODO: Update to use config object
-    # rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[OBunitId.OBS]['capacity']
-    # rho_ldr = global_vars['arrival_rate'] * global_vars['mean_los_ldr'] / locations[OBunitId.LDR]['capacity']
-    # mean_los_pp = global_vars['mean_los_pp_c'] * global_vars['c_sect_prob'] + \
-    #               global_vars['mean_los_pp_noc'] * (1 - global_vars['c_sect_prob'])
-    #
-    # rho_pp = global_vars['arrival_rate'] * mean_los_pp / locations[OBunitId.PP]['capacity']
-
-    # print(f"rho_obs: {rho_obs:6.3f}\n rho_ldr: {rho_ldr:6.3f}\n rho_pp: {rho_pp:6.3f}")
-
+    # TODO - design output processing scheme
     # Patient generator stats
     header = obio.output_header("Patient generator and entry/exit stats", 70, config.scenario, rep_num)
     print(header)
-    print("Num patients generated: {}\n".format(patient_generator_spont_labor.num_patients_created))
+
+    for poisson_id in patient_generators_poisson:
+        print(f"Num patients generated by {poisson_id}: {patient_generators_poisson[poisson_id].num_patients_created}")
+
+    for sched_id in patient_generators_scheduled:
+        print(
+            f"Num patients generated by {sched_id}: {patient_generators_poisson[sched_id].num_patients_created}")
 
     # Unit stats
     for unit_name, unit in obsystem.obunits.items():
@@ -860,10 +876,14 @@ def simulate(config_dict, rep_num):
     print("\nNum patients exiting system: {}".format(obsystem.obunits[EXIT].num_exits))
     print("Last exit at: {:.2f}\n".format(obsystem.obunits[EXIT].last_exit_ts))
 
-    # Occupancy stats
+    # Compute occupancy stats
     occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, config.run_time,
                                                         warmup=config.warmup_time,
                                                         quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+
+    # Compute summary stats for this scenario replication
+    scenario_rep_summary_dict = obstat.process_stop_log(
+        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
 
     # Write output files
     if config.paths['occ_stats'] is not None:
@@ -877,10 +897,6 @@ def simulate(config_dict, rep_num):
     if config.paths['stop_logs'] is not None:
         obio.write_stop_log(config.paths['stop_logs'], obsystem)
         print(f"Stop log written to {config.paths['stop_logs']}")
-
-    # Stop log processing
-    scenario_rep_summary_dict = obstat.process_stop_log(
-        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
 
     # if paths['summary_stats'] is not None:
     #     obio.write_summary_stats(paths['summary_stats'], scenario_rep_summary_dict)
@@ -909,14 +925,32 @@ def main(argv=None):
     # Parse command line arguments
     args = process_command_line(argv)
 
-    # Quick setup of root logger
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        stream=sys.stdout,
-    )
-    # Retrieve root logger (no logger name passed to ``getLogger()``) and update its level
+    # Create root logger
+    # TODO - decide on logging vs structlog vs loguru
     logger = logging.getLogger()
     logger.setLevel(args.loglevel)
+
+    # Create the Handler for logging data to console.
+    logger_handler = logging.StreamHandler()
+    logger_handler.setLevel(args.loglevel)
+
+    # Create a Formatter for formatting the log messages
+    logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # Add the Formatter to the Handler
+    logger_handler.setFormatter(logger_formatter)
+
+    # Add the Handler to the Logger
+    logger.addHandler(logger_handler)
+
+    # Quick setup of root logger
+    # logging.basicConfig(
+    #     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    #     stream=sys.stdout,
+    # )
+    # # Retrieve root logger (no logger name passed to ``getLogger()``) and update its level
+    # logger = logging.getLogger()
+    # logger.setLevel(args.loglevel)
 
     # Load scenario configuration file
     config_dict = obio.load_config(args.config)

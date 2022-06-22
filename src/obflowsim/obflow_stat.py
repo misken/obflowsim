@@ -478,7 +478,7 @@ def varsum(df, unit, pm, alpha):
 
 def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time, warmup=0):
     """
-    Creates and writes out summary by scenario and replication to csv
+    Creates and writes out patient stop summary by scenario and replication to csv
 
     Parameters
     ----------
@@ -538,7 +538,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
 
         newrec[f'num_visits_{unit.lower()}'] = stops_df_grp_unit['entry_ts'].count()[unit]
 
-        # LOS stats for each unit
+    # LOS stats for each unit
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
             active_units.append(unit)
