@@ -41,24 +41,15 @@ Basic OB patient flow model
 
 Details:
 
-- Generates arrivals via Poisson process
+- Generates arrivals via Poisson process patient generators as well as weekly schedules
 - Defines an ``OBUnit`` class that contains a ``simpy.Resource`` object as a member.
   Not subclassing Resource, just trying to use a ``Resource`` as a member.
 - Routing is done via setting ``out`` member of an ``OBUnit`` instance to
  another ``OBUnit`` instance to which the ``OBPatient`` instance should be
- routed. The routing logic, for now, is in ``OBUnit ``object. Later,
- we need some sort of router object and data driven routing.
-- Trying to get patient flow working without a process function that
-explicitly articulates the sequence of units and stays.
-
-Key Lessons Learned:
-
-- Any function that is a generator and might potentially yield for an event
-  must get registered as a process.
+ routed. The routing logic is in ``OBStaticRouter`` with routes defined
+ in the config file.
 
 """
-
-
 
 
 class OBConfig:
@@ -66,51 +57,58 @@ class OBConfig:
 
     """
 
-    def __init__(self, config: Dict, rep_num: int):
-        self.scenario = config['scenario']
-        self.rep_num = rep_num
+    def __init__(self, config_dict: Dict):
+        self.scenario = config_dict['scenario']
 
-        self.run_time = config['run_settings']['run_time']
-        self.warmup_time = config['run_settings']['warmup_time']
+        self.run_time = config_dict['run_settings']['run_time']
+        self.warmup_time = config_dict['run_settings']['warmup_time']
+        self.num_replications = config_dict['run_settings']['num_replications']
 
         # Create random number generators
-        self.random_number_streams = config['random_number_streams']
+        self.random_number_streams = config_dict['random_number_streams']
         self.rg = {}
         for stream, seed in self.random_number_streams.items():
-            self.rg[stream] = default_rng(seed + self.rep_num - 1)
+            self.rg[stream] = default_rng(seed)
 
         # Arrival rates
-        self.rand_arrival_rates = config['rand_arrival_rates']
-        self.rand_arrival_toggles = config['rand_arrival_toggles']
+        self.rand_arrival_rates = config_dict['rand_arrival_rates']
+        self.rand_arrival_toggles = config_dict['rand_arrival_toggles']
 
         # Schedules
         self.schedules = {}
-        if 'sched_csect' in config['schedule_files']:
-            sched_file = config['schedule_files']['sched_csect']
+        if 'sched_csect' in config_dict['schedule_files']:
+            sched_file = config_dict['schedule_files']['sched_csect']
             self.schedules['sched_csect'] = np.loadtxt(sched_file, dtype=int)
 
-        if 'sched_induced_labor' in config['schedule_files']:
-            sched_file = config['schedule_files']['sched_induced_labor']
+        if 'sched_induced_labor' in config_dict['schedule_files']:
+            sched_file = config_dict['schedule_files']['sched_induced_labor']
             self.schedules['sched_induced_labor'] = np.loadtxt(sched_file, dtype=int)
 
-        self.sched_arrival_toggles = config['sched_arrival_toggles']
+        self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
 
         # Branching probabilities
-        self.branching_probs = config['branching_probabilities']
+        self.branching_probs = config_dict['branching_probabilities']
 
         # Length of stay
-        self.los_params = config['los_params']
-        self.los_distributions = obio.create_los_partials(config['los_distributions'],
+        self.los_params = config_dict['los_params']
+        self.los_distributions = obio.create_los_partials(config_dict['los_distributions'],
                                                           self.los_params, self.rg['los'])
 
-        self.locations = config['locations']
-        self.routes = config['routes']
-        # self.paths = config['paths']
-        self.output = config['output']
+        self.locations = config_dict['locations']
+        self.routes = config_dict['routes']
+        self.outputs = config_dict['outputs']
 
         # Calendar related
-        self.start_date = pd.Timestamp(config['run_settings']['start_date'])
-        self.base_time_unit = config['run_settings']['base_time_unit']
+        self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
+        self.base_time_unit = config_dict['run_settings']['base_time_unit']
+
+        # Output paths
+        outputs = self.outputs.keys()
+        self.paths = {output: None for output in outputs}
+        for output in outputs:
+            if self.outputs[output]['write']:
+                Path(self.outputs[output]['path']).mkdir(parents=True, exist_ok=True)
+                self.paths[output] = Path(self.outputs[output]['path'])
 
 
 class SimCalendar:
@@ -778,21 +776,19 @@ def process_command_line(argv=None):
     return args
 
 
-def simulate(config_dict, rep_num):
+def simulate(config, rep_num):
     """
 
     Parameters
     ----------
-    config_dict : dict whose keys are the simulation input args
+    config : OBConfig
     rep_num : int, simulation replication number
 
     Returns
     -------
-    Nothing returned but numerous output files written to ``args_dict[output_path]``
+
 
     """
-
-    config = OBConfig(config_dict, rep_num)
 
     # TODO: Do basic traffic analysis using config object
     # rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[OBunitId.OBS]['capacity']
@@ -817,9 +813,6 @@ def simulate(config_dict, rep_num):
         run_time = config.run_time
     else:
         run_time = simpy.core.Infinity
-
-    # Setup output paths
-    config = obio.setup_output_paths(config, rep_num)
 
     # Initialize a simulation environment and calendar
     env = simpy.Environment()
@@ -881,31 +874,28 @@ def simulate(config_dict, rep_num):
                                                         warmup=config.warmup_time,
                                                         quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
 
-    # Compute summary stats for this scenario replication
-    scenario_rep_summary_dict = obstat.process_stop_log(
-        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
-
-    # Write output files
     if config.paths['occ_stats'] is not None:
-        obio.write_occ_stats(config.paths['occ_stats'], occ_stats_df)
-        print(f"Occupancy stats written to {config.paths['occ_stats']}")
-
-    if config.paths['occ_logs'] is not None:
-        obio.write_occ_log(config.paths['occ_logs'], occ_log_df)
-        print(f"Occupancy log written to {config.paths['occ_logs']}")
-
-    if config.paths['stop_logs'] is not None:
-        obio.write_stop_log(config.paths['stop_logs'], obsystem)
-        print(f"Stop log written to {config.paths['stop_logs']}")
-
-    # if paths['summary_stats'] is not None:
-    #     obio.write_summary_stats(paths['summary_stats'], scenario_rep_summary_dict)
-    #     print(f"Summary stats written to {paths['summary_stats']}")
+        obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
 
     # Print occupancy summary to stdout
     header = obio.output_header("Occupancy stats", 50, config.scenario, rep_num)
     print(header)
     print(occ_stats_df)
+
+    # Compute summary stats for this scenario replication
+    scenario_rep_summary_dict = obstat.process_stop_log(
+        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
+
+    # Write log files
+    if config.paths['occ_logs'] is not None:
+        obio.write_log('occ_log', config.paths['occ_logs'], occ_log_df, config.scenario, rep_num)
+
+    if config.paths['stop_logs'] is not None:
+        stop_log_df = pd.DataFrame(obsystem.stops_timestamps_list)
+        obio.write_log('stop_log', config.paths['stop_logs'], stop_log_df, config.scenario, rep_num)
+
+    # if config.paths['summary_stats'] is not None:
+    #     obio.write_summary_stats(config.paths['summary_stats'], scenario_rep_summary_dict, config.scenario, rep_num)
 
     return scenario_rep_summary_dict
 
@@ -952,20 +942,19 @@ def main(argv=None):
     # logger = logging.getLogger()
     # logger.setLevel(args.loglevel)
 
-    # Load scenario configuration file
+    # Load scenario configuration file and create OBConfig object
     config_dict = obio.load_config(args.config)
-
-    num_replications = config_dict['run_settings']['num_replications']
+    config = OBConfig(config_dict)
 
     results = []
-    for i in range(1, num_replications + 1):
-        scenario_rep_summary_dict = simulate(config_dict, i)
+    for i in range(1, config.num_replications + 1):
+        scenario_rep_summary_dict = simulate(config, i)
         results.append(scenario_rep_summary_dict)
 
     scenario = config_dict['scenario']
     scenario_rep_summary_df = pd.DataFrame(results)
     summary_stat_path = \
-        config_dict['output']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
+        config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
     obio.write_summary_stats(summary_stat_path, scenario_rep_summary_df)
 
     return 0

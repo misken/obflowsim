@@ -124,7 +124,7 @@ def setup_output_paths(config, rep_num):
     return config
 
 
-def write_stop_log(csv_path, obsystem, egress=True):
+def write_log(which_log, log_path, df, scenario, rep_num, egress=True):
     """
 
     Parameters
@@ -137,18 +137,12 @@ def write_stop_log(csv_path, obsystem, egress=True):
     -------
 
     """
-    stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
-    if egress:
-        stops_df.to_csv(csv_path, index=False)
-    else:
-        stops_df[(stops_df['unit'] != 'ENTRY') &
-                     (stops_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+    csv_path =  Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
 
     if egress:
-        stops_df.to_csv(csv_path, index=False)
+        df.to_csv(csv_path, index=False)
     else:
-        stops_df[(stops_df['unit'] != 'ENTRY') &
-                     (stops_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+        df[(df['unit'] != 'ENTRY') & (df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
 
 
 def concat_stop_summaries(stop_summaries_path, output_path,
@@ -180,26 +174,41 @@ def concat_stop_summaries(stop_summaries_path, output_path,
     print(f'Scenario replication csv file written to {output_csv_file}')
 
 
-def write_occ_log(csv_path, occ_df, egress=False):
+# def write_occ_log(csv_path, occ_df, egress=False):
+#     """
+#     Export raw occupancy logs to csv
+#
+#     Parameters
+#     ----------
+#     csv_path
+#     occ_df
+#     egress
+#
+#     Returns
+#     -------
+#
+#     """
+#
+#     if egress:
+#         occ_df.to_csv(csv_path, index=False)
+#     else:
+#         occ_df[(occ_df['unit'] != 'ENTRY') &
+#                (occ_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+
+def write_stats(which_stats, stats_path, stats_df, scenario, rep_num):
     """
-    Export raw occupancy logs to csv
+    Export occupancy stats to csv
 
     Parameters
     ----------
-    csv_path
-    occ_df
-    egress
+    occ_stats_path
+    occ_stats_df
 
     Returns
     -------
-
     """
-
-    if egress:
-        occ_df.to_csv(csv_path, index=False)
-    else:
-        occ_df[(occ_df['unit'] != 'ENTRY') &
-               (occ_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+    csv_path = Path(stats_path / f"{which_stats}_scenario_{scenario}_rep_{rep_num}.csv")
+    stats_df.to_csv(csv_path, index=False)
 
 
 def write_occ_stats(occ_stats_path, occ_stats_df):

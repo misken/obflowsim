@@ -236,7 +236,7 @@ run_settings:
   base_time_unit: h
   
  
-output:
+outputs:
   occ_logs:
     path: ./output/logs
     write: 1

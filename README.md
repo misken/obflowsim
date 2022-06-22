@@ -16,7 +16,22 @@ simulation (DES) model. Active development is happening on the `develop`
 branch whereas the `main` branch contains the original simplified 
 model used in the research project.
 
+The next generation of the simulation model will include a number of
+features needed for simulation of real OB systems for capacity planning,
+scheduling, and process analysis projects. Some of these features
+include:
 
+* multiple patient arrival streams including spontaneous labor, scheduled c-sections and scheduled inductions,
+* multiple patient types based on arrival stream, whether or not labor is augmented, and whether or not a c-section is performed,
+* ability model standard unit configurations such as LDR+PP and LDRP,
+* detailed statistics regarding patient flow and unit occupancy (including time of day and day of week dependencies),
+* ability to model impacts of patients blocked due to insufficient downstream capacity,
+* YAML configuration files for defining simulation scenarios and experimental settings (e.g. run length, warmup time, number of replications).
 
+Our goal is to provide a high quality, open source, fully transparent DES model that both practitioners and other researchers can use and build upon. We
+are motivated by our decades of experience in using DES in actual healthcare operational and capacity planning projects using a 
+variety of commercial DES products. While such products have many advantages, they make it difficult to share models
+and for the healthcare modeling community to assess and improve on modeling approaches for important healthcare systems. This project
+is a very modest first step and there is much work to do to achieve this vision.
 
 

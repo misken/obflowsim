@@ -476,7 +476,7 @@ def varsum(df, unit, pm, alpha):
     return pm_varsum_df
 
 
-def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time, warmup=0):
+def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warmup=0):
     """
     Creates and writes out patient stop summary by scenario and replication to csv
 
@@ -497,7 +497,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     results = []
     active_units = []
 
-    print(scenario_num, rep_num)
+    print(scenario, rep_num)
 
     # Read the log file and filter by included categories
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
@@ -523,7 +523,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     blocked_cond_stats = grp_blocked['entry_tryentry'].apply(get_stats, 'delay_')
 
     # Create new summary record as dict
-    newrec = {'scenario': scenario_num}
+    newrec = {'scenario': scenario}
 
     newrec['rep'] = rep_num
     newrec['num_days'] = num_days
@@ -577,8 +577,8 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
             newrec[f'iatime_kurt_{unit.lower()}'] = iatimes_unit.kurtosis()
 
     # Get occ from occ stats summaries
-    #occ_stats_fn = Path(occ_stats_path) / f"unit_occ_stats_scenario_{scenario_num}_rep_{rep_num}.csv"
-    occ_stats_df = pd.read_csv(occ_stats_path, index_col=0)
+    occ_stats_fn = Path(occ_stats_path) / f"occ_stats_scenario_{scenario}_rep_{rep_num}.csv"
+    occ_stats_df = pd.read_csv(occ_stats_fn, index_col=0)
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
             newrec[f'occ_mean_{unit.lower()}'] = occ_stats_df.loc[unit]['mean_occ']
@@ -631,8 +631,6 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     # output_csv_file = output_path / f'{output_file_stem}.csv'
     # scenario_rep_summary_df = scenario_rep_summary_df.sort_values(by=['scenario', 'rep'])
     # scenario_rep_summary_df.to_csv(output_csv_file, index=False)
-
-    return active_units
 
 
 def process_command_line(argv=None):
