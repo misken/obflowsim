@@ -92,13 +92,13 @@ locations:
   ENTRY:
     capacity: 1000
   OBS:
-    capacity: 100
+    capacity: 1000
   LDR:
-    capacity: 4
+    capacity: 8
   CSECT:
     capacity: 1000
   PP:
-    capacity: 12
+    capacity: 18
   EXIT:
     capacity: 1000
 
@@ -228,12 +228,21 @@ routes:
     
     
 run_settings:
-  num_replications: 2
-  run_time: 1680
-  warmup_time: 0
+  num_replications: 5
+  run_time: 7200
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional stopping condition
   # max_arrivals = 10000
-  start_date: 2022-02-01
+  
+  # h = hours, d = days
   base_time_unit: h
+  
+  # Comment out start_date line to use default of 1970-01-05
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2022-02-01
   
  
 outputs:

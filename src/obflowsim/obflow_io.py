@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+import json
 
 import numpy as np
 from numpy.random import default_rng
@@ -50,14 +51,6 @@ def load_config(cfg):
 
     return yaml_config
 
-
-# def read_arrivals_sched_c(filename):
-#     """
-#     Read 7x24 tab delimited file of scheduled c-section arrivals
-#     """
-#
-#     sched_c_arrivals = np.loadtxt(filename, int)
-#     return sched_c_arrivals
 
 def get_args_and_kwargs(*args, **kwargs):
     return args, kwargs
@@ -174,27 +167,6 @@ def concat_stop_summaries(stop_summaries_path, output_path,
     print(f'Scenario replication csv file written to {output_csv_file}')
 
 
-# def write_occ_log(csv_path, occ_df, egress=False):
-#     """
-#     Export raw occupancy logs to csv
-#
-#     Parameters
-#     ----------
-#     csv_path
-#     occ_df
-#     egress
-#
-#     Returns
-#     -------
-#
-#     """
-#
-#     if egress:
-#         occ_df.to_csv(csv_path, index=False)
-#     else:
-#         occ_df[(occ_df['unit'] != 'ENTRY') &
-#                (occ_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
-
 def write_stats(which_stats, stats_path, stats_df, scenario, rep_num):
     """
     Export occupancy stats to csv
@@ -245,7 +217,7 @@ def write_summary_stats(summary_stats_path, summary_stats_df):
 
 def output_header(msg, linelen, scenario, rep_num):
 
-    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * linelen}\n"
+    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * linelen}"
     return header
 
 

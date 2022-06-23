@@ -30,6 +30,7 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
     """
     occ_stats_dfs = []
     occ_dfs = []
+
     for unit_name, unit in obsystem.obunits.items():
         # Only compute if at least onc change in occupancy during simulation
         if len(unit.occupancy_list) > 1:
@@ -37,6 +38,8 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
 
             # Create occupancy dataframe and compute time in each state
             df = pd.DataFrame(occ, columns=['timestamp', 'occ'])
+            if obsystem.sim_calendar.use_calendar_time:
+                df['calendar_ts'] = df['timestamp'].map(lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
             df['occ_weight'] = -1 * df['timestamp'].diff(periods=-1)
 
             last_weight = end_time - df.iloc[-1, 0]
