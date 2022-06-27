@@ -34,4 +34,21 @@ variety of commercial DES products. While such products have many advantages, th
 and for the healthcare modeling community to assess and improve on modeling approaches for important healthcare systems. This project
 is a very modest first step and there is much work to do to achieve this vision.
 
+This pre-release version has the following capabilities:
+
+- random patient arrivals via stationary Poisson arrival process
+- scheduled patient arrivals via fixed, repeating, one week schedules
+- YAML config file for specifying all simulation inputs
+- LOS distributions from a select number of numpy random functions
+- serial routes
+- summary statistics by patient and by unit
+- detailed log files for patient stops and for unit occupancy changes
+
+A few key features that have **NOT** yet been implemented include:
+
+- blocking related LOS adjustments
+- realistic discharge timing for non-stationary analysis
+
+
+
 
