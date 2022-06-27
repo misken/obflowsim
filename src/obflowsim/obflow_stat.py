@@ -30,13 +30,16 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
     """
     occ_stats_dfs = []
     occ_dfs = []
-    for unit in obsystem.obunits:
+
+    for unit_name, unit in obsystem.obunits.items():
         # Only compute if at least onc change in occupancy during simulation
         if len(unit.occupancy_list) > 1:
             occ = unit.occupancy_list
 
             # Create occupancy dataframe and compute time in each state
             df = pd.DataFrame(occ, columns=['timestamp', 'occ'])
+            if obsystem.sim_calendar.use_calendar_time:
+                df['calendar_ts'] = df['timestamp'].map(lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
             df['occ_weight'] = -1 * df['timestamp'].diff(periods=-1)
 
             last_weight = end_time - df.iloc[-1, 0]
@@ -476,9 +479,9 @@ def varsum(df, unit, pm, alpha):
     return pm_varsum_df
 
 
-def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time, warmup=0):
+def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warmup=0):
     """
-    Creates and writes out summary by scenario and replication to csv
+    Creates and writes out patient stop summary by scenario and replication to csv
 
     Parameters
     ----------
@@ -497,7 +500,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     results = []
     active_units = []
 
-    print(scenario_num, rep_num)
+    print(scenario, rep_num)
 
     # Read the log file and filter by included categories
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
@@ -523,7 +526,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     blocked_cond_stats = grp_blocked['entry_tryentry'].apply(get_stats, 'delay_')
 
     # Create new summary record as dict
-    newrec = {'scenario': scenario_num}
+    newrec = {'scenario': scenario}
 
     newrec['rep'] = rep_num
     newrec['num_days'] = num_days
@@ -538,7 +541,7 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
 
         newrec[f'num_visits_{unit.lower()}'] = stops_df_grp_unit['entry_ts'].count()[unit]
 
-        # LOS stats for each unit
+    # LOS stats for each unit
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
             active_units.append(unit)
@@ -577,8 +580,8 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
             newrec[f'iatime_kurt_{unit.lower()}'] = iatimes_unit.kurtosis()
 
     # Get occ from occ stats summaries
-    #occ_stats_fn = Path(occ_stats_path) / f"unit_occ_stats_scenario_{scenario_num}_rep_{rep_num}.csv"
-    occ_stats_df = pd.read_csv(occ_stats_path, index_col=0)
+    occ_stats_fn = Path(occ_stats_path) / f"occ_stats_scenario_{scenario}_rep_{rep_num}.csv"
+    occ_stats_df = pd.read_csv(occ_stats_fn, index_col=0)
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
             newrec[f'occ_mean_{unit.lower()}'] = occ_stats_df.loc[unit]['mean_occ']
@@ -631,8 +634,6 @@ def process_stop_log(scenario_num, rep_num, obsystem,  occ_stats_path, run_time,
     # output_csv_file = output_path / f'{output_file_stem}.csv'
     # scenario_rep_summary_df = scenario_rep_summary_df.sort_values(by=['scenario', 'rep'])
     # scenario_rep_summary_df.to_csv(output_csv_file, index=False)
-
-    return active_units
 
 
 def process_command_line(argv=None):

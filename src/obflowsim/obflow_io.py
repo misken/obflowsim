@@ -4,6 +4,30 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+import json
+
+import numpy as np
+from numpy.random import default_rng
+import numpy.random
+import json
+from functools import partial
+import copy
+
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Optional,
+    Tuple,
+)
+
+ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform']
 
 
 def load_config(cfg):
@@ -25,7 +49,114 @@ def load_config(cfg):
     return yaml_config
 
 
-def write_stop_log(csv_path, obsystem, egress=True):
+def get_args_and_kwargs(*args, **kwargs):
+    return args, kwargs
+
+
+def convert_str_to_args_and_kwargs(s):
+    return eval(s.replace(s[:s.find('(')], 'get_args_and_kwargs'))
+
+
+def convert_str_to_func_name(s):
+    return s[:s.find('(')]
+
+
+def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
+    """
+
+    Parameters
+    ----------
+    rg
+    raw_los_dist: Dict
+    los_params: Dict
+
+    Returns
+    -------
+    Dict of partial functions for LOS generation by pat type and unit
+
+    """
+
+    # Replace all los_param use with literal values
+    los_dists_str_json = json.dumps(raw_los_dists)
+
+    los_params_sorted = [key for key in los_params]
+    los_params_sorted.sort(key=len, reverse=True)
+
+    for param in los_params_sorted:
+        los_dists_str_json = los_dists_str_json.replace(param, str(los_params[param]))
+
+    los_dists_instantiated = json.loads(los_dists_str_json)
+
+    los_dists_partials = copy.deepcopy(los_dists_instantiated)
+    los_means = copy.deepcopy(los_dists_instantiated)
+    for key_pat_type in los_dists_partials:
+        for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
+            func_name = convert_str_to_func_name(raw_dist_str)
+            # Check for valid func name
+            if func_name in ALLOWED_LOS_DIST_LIST:
+                args, kwargs = convert_str_to_args_and_kwargs(raw_dist_str)
+                partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
+                los_dists_partials[key_pat_type][key_unit] = partial_dist_func
+                los_means[key_pat_type][key_unit] = mean_from_dist_params(func_name, args)
+            else:
+                raise NameError(f"The use of '{func_name}' is not allowed")
+
+    return los_dists_partials, los_means
+
+def mean_from_dist_params(dist_name: str, params: Tuple):
+    """
+    Compute mean from distribution name and parameters - numpy based
+
+    Parameters
+    ----------
+    dist_name
+    params
+
+    Returns
+    -------
+
+    """
+
+    if dist_name == 'gamma':
+        _shape = params[0]
+        _scale = params[1]
+        _mean = _shape * _scale
+    elif dist_name == 'triangular':
+        _left = params[0]
+        _mode = params[1]
+        _right = params[2]
+        _mean = (_left + _mode + _right) / 3
+    elif dist_name == 'normal':
+        _mean = params[0]
+    elif dist_name == 'exponential':
+        _mean = params[0]
+    elif dist_name == 'uniform':
+        _left = params[0]
+        _right = params[1]
+        _mean = (_left + _right) / 2
+    else:
+        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
+
+    return _mean
+
+
+
+
+
+
+def setup_output_paths(config, rep_num):
+    stats = config.output.keys()
+    config.paths = {stat: None for stat in stats}
+    for stat in stats:
+        if config.output[stat]['write']:
+            Path(config.output[stat]['path']).mkdir(parents=True, exist_ok=True)
+            config.paths[stat] = Path(
+                config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
+
+    return config
+
+
+def write_log(which_log, log_path, df, scenario, rep_num, egress=True):
     """
 
     Parameters
@@ -38,18 +169,12 @@ def write_stop_log(csv_path, obsystem, egress=True):
     -------
 
     """
-    stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
-    if egress:
-        stops_df.to_csv(csv_path, index=False)
-    else:
-        stops_df[(stops_df['unit'] != 'ENTRY') &
-                     (stops_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+    csv_path =  Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
 
     if egress:
-        stops_df.to_csv(csv_path, index=False)
+        df.to_csv(csv_path, index=False)
     else:
-        stops_df[(stops_df['unit'] != 'ENTRY') &
-                     (stops_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+        df[(df['unit'] != 'ENTRY') & (df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
 
 
 def concat_stop_summaries(stop_summaries_path, output_path,
@@ -81,26 +206,20 @@ def concat_stop_summaries(stop_summaries_path, output_path,
     print(f'Scenario replication csv file written to {output_csv_file}')
 
 
-def write_occ_log(csv_path, occ_df, egress=False):
+def write_stats(which_stats, stats_path, stats_df, scenario, rep_num):
     """
-    Export raw occupancy logs to csv
+    Export occupancy stats to csv
 
     Parameters
     ----------
-    csv_path
-    occ_df
-    egress
+    occ_stats_path
+    occ_stats_df
 
     Returns
     -------
-
     """
-
-    if egress:
-        occ_df.to_csv(csv_path, index=False)
-    else:
-        occ_df[(occ_df['unit'] != 'ENTRY') &
-               (occ_df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+    csv_path = Path(stats_path / f"{which_stats}_scenario_{scenario}_rep_{rep_num}.csv")
+    stats_df.to_csv(csv_path, index=False)
 
 
 def write_occ_stats(occ_stats_path, occ_stats_df):
@@ -137,7 +256,7 @@ def write_summary_stats(summary_stats_path, summary_stats_df):
 
 def output_header(msg, linelen, scenario, rep_num):
 
-    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * linelen}\n"
+    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * linelen}"
     return header
 
 

@@ -1,0 +1,261 @@
+scenario: 1
+
+# A rate of 0.0 will shut off the arrival stream
+rand_arrival_rates:
+    spont_labor: 0.20
+    urgent_induced_labor: 0.00
+    non_delivery_ldr: 0.05
+    non_delivery_pp: 0.05
+
+# 1=on, 0=off    
+rand_arrival_toggles:
+    spont_labor: 1
+    urgent_induced_labor: 1
+    non_delivery_ldr: 1
+    non_delivery_pp: 1
+
+# A filename of '' (empty string) will shut off arrival stream    
+schedule_files:
+    sched_csect: ./input/sched_c.txt
+    sched_induced_labor: ./input/sched_induction.txt
+
+# 1=on, 0=off    
+sched_arrival_toggles:
+    sched_csect: 0
+    sched_induced_labor: 0
+
+branching_probabilities:
+    pct_spont_labor_aug: 0.4
+    pct_spont_labor_to_c: 0.4
+    pct_aug_labor_to_c: 0.06
+    pct_sched_ind_to_c: 0.12
+    pct_urg_ind_to_c: 0.12
+
+# You can define input parameters to be used on los_distributions section
+los_params:
+    mean_los_csect: 1.0
+    mean_los_ldr: 12.0
+    mean_los_obs: 2.4
+    mean_los_pp_c: 72.0
+    mean_los_pp_noc: 48.0
+    mean_los_ldr_nondelivery: 36.0
+    mean_los_pp_nondelivery: 48.0
+    num_erlang_stages_csect: 4
+    num_erlang_stages_ldr: 2
+    num_erlang_stages_obs: 1
+    num_erlang_stages_pp: 8
+    num_erlang_stages_ldr_nondelivery: 2
+    num_erlang_stages_pp_nondelivery: 4
+
+# You can use a restricted set of numpy distributions parameterized via
+# constants are user defined parameters in the los_params section.  
+los_distributions:
+    RAND_SPONT_REG:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+    RAND_SPONT_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    RAND_AUG_REG:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+    RAND_AUG_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    SCHED_CSECT:
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    SCHED_IND_REG:
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+    SCHED_IND_CSECT:
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    RAND_NONDELIV_LDR:
+        LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+    RAND_NONDELIV_PP:
+        PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
+
+
+
+# Do we need id's for the locations since this model has fixed set
+# of locations? Is the name attribute used?
+
+locations:
+  ENTRY:
+    capacity: 1000
+  OBS:
+    capacity: 1000
+  LDR:
+    capacity: 8
+  CSECT:
+    capacity: 1000
+  PP:
+    capacity: 30
+  EXIT:
+    capacity: 1000
+
+    
+
+random_number_streams:
+  arrivals: 27
+  los: 31
+  
+  
+routes:
+  RAND_SPONT_REG:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_PP
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  RAND_SPONT_CSECT:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_CSECT
+      to: CSECT
+    - from: CSECT
+      id: CSECT_pp
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  RAND_AUG_REG:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_PP
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  RAND_AUG_CSECT:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_CSECT
+      to: CSECT
+    - from: CSECT
+      id: CSECT_pp
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  SCHED_CSECT:
+    edges:
+    - from: ENTRY
+      id: ENTRY_CSECT
+      to: CSECT
+    - from: CSECT
+      id: CSECT_pp
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  SCHED_IND_REG:
+    edges:
+    - from: ENTRY
+      id: ENTRY_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_PP
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  SCHED_IND_CSECT:
+    edges:
+    - from: ENTRY
+      id: ENTRY_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_CSECT
+      to: CSECT
+    - from: CSECT
+      id: CSECT_pp
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+  RAND_NONDELIV_LDR:
+    edges:
+    - from: ENTRY
+      id: ENTRY_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_EXIT
+      to: EXIT
+  RAND_NONDELIV_PP:
+    edges:
+    - from: ENTRY
+      id: ENTRY_PP
+      to: PP
+    - from: PP
+      id: LDR_EXIT
+      to: EXIT
+
+    
+    
+run_settings:
+  num_replications: 5
+  run_time: 7200
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional stopping condition
+  # max_arrivals = 10000
+  
+  # h = hours, d = days
+  base_time_unit: h
+  
+  # Comment out start_date line to use default of 1970-01-05
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2022-02-01
+  
+ 
+outputs:
+  occ_logs:
+    path: ./output/logs
+    write: 1
+  occ_stats:
+    path: ./output/stats
+    write: 1
+  stop_logs:
+    path: ./output/logs
+    write: 1
+  summary_stats:
+    path: ./output/stats
+    write: 1
+
