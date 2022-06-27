@@ -27,10 +27,7 @@ from typing import (
     Tuple,
 )
 
-ALLOWED_LOS_DIST_LIST = ['beta', 'binomial', 'chisquare', 'exponential', 'gamma',
-                         'geometric', 'hypergeometric', 'laplace', 'logistic', 'lognormal',
-                         'multinomial', 'negative_binomial', 'normal', 'pareto',
-                         'poisson', 'triangular', 'uniform', 'weibull', 'zipf']
+ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform']
 
 
 def load_config(cfg):
@@ -91,6 +88,7 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     los_dists_instantiated = json.loads(los_dists_str_json)
 
     los_dists_partials = copy.deepcopy(los_dists_instantiated)
+    los_means = copy.deepcopy(los_dists_instantiated)
     for key_pat_type in los_dists_partials:
         for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
             func_name = convert_str_to_func_name(raw_dist_str)
@@ -99,10 +97,51 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 args, kwargs = convert_str_to_args_and_kwargs(raw_dist_str)
                 partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
+                los_means[key_pat_type][key_unit] = mean_from_dist_params(func_name, args)
             else:
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
-    return los_dists_partials
+    return los_dists_partials, los_means
+
+def mean_from_dist_params(dist_name: str, params: Tuple):
+    """
+    Compute mean from distribution name and parameters - numpy based
+
+    Parameters
+    ----------
+    dist_name
+    params
+
+    Returns
+    -------
+
+    """
+
+    if dist_name == 'gamma':
+        _shape = params[0]
+        _scale = params[1]
+        _mean = _shape * _scale
+    elif dist_name == 'triangular':
+        _left = params[0]
+        _mode = params[1]
+        _right = params[2]
+        _mean = (_left + _mode + _right) / 3
+    elif dist_name == 'normal':
+        _mean = params[0]
+    elif dist_name == 'exponential':
+        _mean = params[0]
+    elif dist_name == 'uniform':
+        _left = params[0]
+        _right = params[1]
+        _mean = (_left + _right) / 2
+    else:
+        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
+
+    return _mean
+
+
+
+
 
 
 def setup_output_paths(config, rep_num):

@@ -98,7 +98,7 @@ locations:
   CSECT:
     capacity: 1000
   PP:
-    capacity: 18
+    capacity: 30
   EXIT:
     capacity: 1000
 

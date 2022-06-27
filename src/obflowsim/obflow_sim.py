@@ -28,6 +28,7 @@ import json
 
 import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
+import obflowsim.obflow_qng as obq
 
 ENTRY = 'ENTRY'
 EXIT = 'EXIT'
@@ -88,11 +89,11 @@ class OBConfig:
         self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
 
         # Branching probabilities
-        self.branching_probs = config_dict['branching_probabilities']
+        self.branching_probabilities = config_dict['branching_probabilities']
 
         # Length of stay
         self.los_params = config_dict['los_params']
-        self.los_distributions = obio.create_los_partials(config_dict['los_distributions'],
+        self.los_distributions, self.los_means = obio.create_los_partials(config_dict['los_distributions'],
                                                           self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
@@ -214,6 +215,22 @@ class ArrivalType(Enum):
     SCHED_CSECT = 'sched_csect'
     SCHED_INDUCED_LABOR = 'sched_induced_labor'
 
+
+class PatientTypeArrivalType:
+
+    pat_type_to_arrival_type = {
+        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR.value,
+        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR.value,
+        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT.value,
+        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR.value,
+        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR.value,
+        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR.value,
+        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
+    }
 
 # class OBunitId(IntEnum):
 #     ENTRY = 0
@@ -645,15 +662,15 @@ class OBPatientGeneratorPoisson:
     def assign_patient_type(self):
         if self.uid == ArrivalType.SPONT_LABOR.value:
             # Determine if labor augmented or not
-            if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_aug']:
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_aug']:
                 # Augmented labor
-                if self.arr_stream_rg.random() < self.config.branching_probs['pct_aug_labor_to_c']:
+                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_aug_labor_to_c']:
                     return PatientType.RAND_AUG_CSECT.value
                 else:
                     return PatientType.RAND_AUG_REG.value
             else:
                 # Labor not augmented
-                if self.arr_stream_rg.random() < self.config.branching_probs['pct_spont_labor_to_c']:
+                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_to_c']:
                     return PatientType.RAND_SPONT_CSECT.value
                 else:
                     return PatientType.RAND_SPONT_REG.value
@@ -662,7 +679,7 @@ class OBPatientGeneratorPoisson:
         elif self.uid == ArrivalType.NON_DELIVERY_PP.value:
             return PatientType.RAND_NONDELIV_PP.value
         elif self.uid == ArrivalType.URGENT_INDUCED_LABOR.value:
-            if self.arr_stream_rg.random() < self.config.branching_probs['pct_urg_ind_to_c']:
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_urg_ind_to_c']:
                 return PatientType.URGENT_IND_CSECT.value
             else:
                 return PatientType.URGENT_IND_REG.value
@@ -753,7 +770,7 @@ class OBPatientGeneratorWeeklyStaticSchedule:
             return PatientType.SCHED_CSECT.value
         else:
             # Determine if scheduled induction ends up with c-section
-            if self.arr_stream_rg.random() < self.config.branching_probs['pct_sched_ind_to_c']:
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_sched_ind_to_c']:
                 return PatientType.SCHED_IND_CSECT.value
             else:
                 return PatientType.SCHED_IND_REG.value
@@ -963,6 +980,10 @@ def main(argv=None):
     scenario = config.scenario
     summary_stat_path = \
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
+
+    unit_load, unit_intensity = obq.unit_loads(config)
+    print(unit_load)
+    print(unit_intensity)
 
     results = []
     for i in range(1, config.num_replications + 1):
