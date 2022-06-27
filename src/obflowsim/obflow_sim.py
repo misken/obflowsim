@@ -4,6 +4,7 @@ from enum import Enum
 from copy import deepcopy
 from pathlib import Path
 import argparse
+from pprint import pprint
 
 from typing import (
     TYPE_CHECKING,
@@ -817,19 +818,6 @@ def simulate(config, rep_num):
 
     """
 
-    # TODO: Do basic traffic analysis using config object
-    # rho_obs = global_vars['arrival_rate'] * global_vars['mean_los_obs'] / locations[OBunitId.OBS]['capacity']
-    # rho_ldr = global_vars['arrival_rate'] * global_vars['mean_los_ldr'] / locations[OBunitId.LDR]['capacity']
-    # mean_los_pp = global_vars['mean_los_pp_c'] * global_vars['c_sect_prob'] + \
-    #               global_vars['mean_los_pp_noc'] * (1 - global_vars['c_sect_prob'])
-    #
-    # rho_pp = global_vars['arrival_rate'] * mean_los_pp / locations[OBunitId.PP]['capacity']
-
-    # print(f"rho_obs: {rho_obs:6.3f}\n rho_ldr: {rho_ldr:6.3f}\n rho_pp: {rho_pp:6.3f}")
-    # Compute and display traffic intensities
-    # header = obio.output_header("Input traffic parameters", 50, config.scenario, rep_num)
-    # print(header)
-
     # Determine stopping conditions specified in config file
     if hasattr(config, 'max_arrivals'):
         max_arrivals = config.max_arrivals
@@ -981,9 +969,10 @@ def main(argv=None):
     summary_stat_path = \
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
 
+    # Check for undercapacitated system and compute basic load stats
     unit_load, unit_intensity = obq.unit_loads(config)
-    print(unit_load)
-    print(unit_intensity)
+    # pprint(unit_load)
+    # pprint(unit_intensity)
 
     results = []
     for i in range(1, config.num_replications + 1):

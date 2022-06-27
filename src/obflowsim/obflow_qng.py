@@ -1,9 +1,12 @@
+import logging
+
 import numpy as np
 import networkx as nx
 
 from obflow_sim import OBConfig
 from obflow_sim import PatientType
 
+logger = logging.getLogger(__name__)
 
 def unit_loads(config: OBConfig):
 
@@ -31,6 +34,10 @@ def unit_loads(config: OBConfig):
     traffic_intensity = {}
     for unit_name, unit in config.locations.items():
         traffic_intensity[unit_name] = load[unit_name] / unit['capacity']
+
+        if traffic_intensity[unit_name] >= 1.0:
+            logger.warning(
+                f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load[unit_name]:.1f}, cap={unit['capacity']})")
 
     return load, traffic_intensity
 
