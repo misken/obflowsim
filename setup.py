@@ -30,7 +30,7 @@ setup(
             'mm_merge_predict_simulated=obflowsim.mm.mm_merge_predict_simulated:main',
         ],
     },
-    version='0.1.0',
+    version='0.1.0'
     description='OB patient flow simulation in Python',
     author='misken',
     license='MIT',
