@@ -33,8 +33,6 @@ are motivated by our decades of experience in using DES in actual healthcare ope
 variety of commercial DES products. While such products have many advantages, they make it difficult to share models
 and for the healthcare modeling community to assess and improve on modeling approaches for important healthcare systems. This project
 is a very modest first step and there is much work to do to achieve this vision.
-<<<<<<< HEAD
-=======
 
 This pre-release version has the following capabilities:
 
