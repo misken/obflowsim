@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 import argparse
 from pprint import pprint
+from __future__ import annotations
 
 from typing import (
     TYPE_CHECKING,
@@ -24,7 +25,9 @@ import pandas as pd
 import numpy as np
 import simpy
 from numpy.random import default_rng
+from numpy.random import Generator
 import networkx as nx
+from networkx import DiGraph
 import json
 
 import obflowsim.obflow_io as obio
@@ -46,7 +49,7 @@ Details:
 
 - Generates arrivals via Poisson process patient generators as well as weekly schedules
 - Defines an ``OBUnit`` class that contains a ``simpy.Resource`` object as a member.
-  Not subclassing Resource, just trying to use a ``Resource`` as a member.
+  Not subclassing Resource, just using a ``Resource`` as a member.
 - Routing is done via setting ``out`` member of an ``OBUnit`` instance to
  another ``OBUnit`` instance to which the ``OBPatient`` instance should be
  routed. The routing logic is in ``OBStaticRouter`` with routes defined
@@ -158,6 +161,7 @@ class OBsystem:
 
     def __init__(self, env: 'Environment', locations: Dict, los_distributions: Dict,
                  sim_calendar: SimCalendar):
+
         self.env = env
         self.sim_calendar = sim_calendar
         self.los_distributions = los_distributions
@@ -172,6 +176,128 @@ class OBsystem:
 
         # Create list to hold timestamps dictionaries (one per patient)
         self.stops_timestamps_list = []
+
+
+class OBStaticRouter(object):
+    def __init__(self, env, obsystem, routes):
+        """
+        Routes patients having a fixed, serial route
+
+        Parameters
+        ----------
+        env: Environment
+        obsystem: OBsystem
+        routes: Dict
+        """
+
+        self.env = env
+        self.obsystem = obsystem
+
+        # Dict of networkx DiGraph objects
+        self.route_graphs = {}
+
+        # Create route templates from routes list (of unit numbers)
+        for route_name, route in routes.items():
+            route_graph = nx.DiGraph()
+
+            # Add edges - simple serial route in this case
+            for edge in route['edges']:
+                route_graph.add_edge(edge['from'], edge['to'])
+
+            for node in route_graph.nodes():
+                nx.set_node_attributes(route_graph,
+                                       {node: {'planned_los': 0.0, 'actual_los': 0.0, 'blocked_duration': 0.0}})
+
+            # Each patient will eventually end up with their own copy of the route since
+            # it will contain LOS values
+            self.route_graphs[route_name] = route_graph.copy()
+            logging.debug(f"{self.env.now:.4f}: route graph {route_name} - {route_graph.edges}")
+
+    def validate_route_graph(self, route_graph: DiGraph) -> bool:
+        """
+        Make sure route is of appropriate structure for router.
+
+        Example: Static routes should have exactly one arc entering and one arc emanating from each non-egress node.
+
+        Parameters
+        ----------
+        route_graph: DiGraph
+
+        Returns
+        -------
+        bool
+            True if route is valid
+
+        """
+        # TODO: Implement route validation rules
+        return True
+
+    def create_route(self, patient_type: PatientType, los_distributions: Dict, entry_delay: float = 0) -> DiGraph:
+        """
+
+        Parameters
+        ----------
+        patient_type: PatientType
+        los_distributions: Dict of Generator
+        entry_delay: float (default is 0 implying patient uses ENTRY only as a queueing location)
+            Used with scheduled arrivals by holding patient for ``entry_delay`` time units before allowed to enter
+
+        Returns
+        -------
+        DiGraph
+            Nodes are units with LOS information stored as node attributes
+
+        Notes
+        -----
+
+        """
+
+        # Copy the route template to create new graph object
+        route_graph = deepcopy(self.route_graphs[patient_type])
+
+        # Sample from los distributions for planned_los
+        for unit, data in route_graph.nodes(data=True):
+            if unit == ENTRY:
+                # Entry delays are used to model scheduled procedures. Delay
+                # time is number of time units from start of current week
+                route_graph.nodes[unit]['planned_los'] = entry_delay
+            elif unit == EXIT:
+                route_graph.nodes[unit]['planned_los'] = 0.0
+            else:
+                route_graph.nodes[unit]['planned_los'] = los_distributions[patient_type][unit]()
+
+        return route_graph
+
+    def get_next_unit_id(self, obpatient: OBPatient):
+        """
+        Get next unit in route
+
+        Parameters
+        ----------
+        obpatient: OBPatient
+
+        Returns
+        -------
+        str
+            Unit names are used as node id's
+
+        """
+
+        # Get this patient's route graph
+        G = obpatient.route_graph
+
+        # Find all possible next units
+        successors = [n for n in G.successors(obpatient.current_unit_id)]
+        next_unit_id = successors[0]
+
+        if next_unit_id is None:
+            logging.error(
+                f"{self.env.now:.4f}: {obpatient.patient_id} has no next unit at {obpatient.current_unit_id}.")
+            exit(1)
+
+        logging.debug(
+            f"{self.env.now:.4f}: {obpatient.patient_id} current_unit_id {obpatient.current_unit_id}, next_unit_id {next_unit_id}")
+        return next_unit_id
 
 
 class PatientType(Enum):
@@ -245,6 +371,88 @@ class PatientTypeArrivalType:
 #     EXIT = 8
 
 
+class OBPatient:
+    """
+
+    """
+
+    def __init__(self, patient_id: str, patient_type: PatientType, arr_type: ArrivalType,
+                 arr_time: float, router: OBStaticRouter,
+                 los_distributions: Dict, entry_delay: float = 0):
+        """
+
+        Parameters
+        ----------
+
+        """
+        self.system_arrival_ts = arr_time
+        self.patient_id = patient_id
+        self.patient_type = patient_type
+        self.arr_type = arr_type
+        self.router = router
+        self.entry_delay = entry_delay
+
+        # Initialize unit stop attributes
+        self.current_stop_num = -1
+        self.previous_unit_id = None
+        self.current_unit_id = None
+        self.next_unit_id = None
+
+        # Determine route
+        self.route_graph = router.create_route(self.patient_type,
+                                               los_distributions, self.entry_delay)
+        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
+
+        # Since we have fixed route, just initialize full list to hold bed requests
+        # The index numbers are stop numbers and so slot 0 is for ENTRY location
+        self.bed_requests = [None for _ in range(self.route_length)]
+        self.unit_stops = [None for _ in range(self.route_length)]
+        self.planned_los = [None for _ in range(self.route_length)]
+        self.adjusted_los = [None for _ in range(self.route_length)]
+        self.request_entry_ts = [None for _ in range(self.route_length)]
+        self.entry_ts = [None for _ in range(self.route_length)]
+        self.wait_to_enter = [None for _ in range(self.route_length)]
+        self.request_exit_ts = [None for _ in range(self.route_length)]
+        self.exit_ts = [None for _ in range(self.route_length)]
+        self.wait_to_exit = [None for _ in range(self.route_length)]
+        self.system_exit_ts = None
+
+    def exit_system(self, env, obsystem):
+
+        logging.debug(
+            f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
+
+        # Create dictionaries of timestamps for patient_stop log
+        for stop in range(len(self.unit_stops)):
+            if self.unit_stops[stop] is not None:
+                # noinspection PyUnresolvedReferences
+                timestamps = {'patient_id': self.patient_id,
+                              'patient_type': self.patient_type,
+                              'arrival_type': self.arr_type,
+                              'unit': self.unit_stops[stop],
+                              'request_entry_ts': self.request_entry_ts[stop],
+                              'entry_ts': self.entry_ts[stop],
+                              'request_exit_ts': self.request_exit_ts[stop],
+                              'exit_ts': self.exit_ts[stop],
+                              'planned_los': self.planned_los[stop],
+                              'adjusted_los': self.adjusted_los[stop],
+                              'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
+                              'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
+                              'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
+                              'wait_to_enter': self.wait_to_enter[stop],
+                              'wait_to_exit': self.wait_to_exit[stop],
+                              'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
+                              'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
+
+                obsystem.stops_timestamps_list.append(timestamps)
+
+    def __repr__(self):
+        return "patientuid: {}, patient_type: {}, time: {}". \
+            format(self.patient_id, self.patient_type, self.system_arrival_ts)
+
+
 class OBunit:
     """ Models an OB unit with fixed capacity.
 
@@ -279,7 +487,7 @@ class OBunit:
         # Create list to hold occupancy tuples (time, occ)
         self.occupancy_list = [(0.0, 0.0)]
 
-    def put(self, obpatient, obsystem):
+    def put(self, obpatient: OBPatient, obsystem: OBsystem):
         """
         A process method called when a bed is requested in the unit.
 
@@ -421,177 +629,10 @@ class OBunit:
         return msg
 
 
-class OBPatient:
-    """
-
-    """
-
-    def __init__(self, patient_id, patient_type, arr_type, arr_time,
-                 router, los_distributions, entry_delay=0):
-        """
-
-        Parameters
-        ----------
-
-        """
-        self.system_arrival_ts = arr_time
-        self.patient_id = patient_id
-        self.patient_type = patient_type
-        self.arr_type = arr_type
-        self.router = router
-        self.entry_delay = entry_delay
-
-        # Initialize unit stop attributes
-        self.current_stop_num = -1
-        self.previous_unit_id = None
-        self.current_unit_id = None
-        self.next_unit_id = None
-
-        # Determine route
-        self.route_graph = router.create_route(self.patient_type,
-                                               los_distributions, self.entry_delay)
-        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
-
-        # Since we have fixed route, just initialize full list to hold bed requests
-        # The index numbers are stop numbers and so slot 0 is for ENTRY location
-        self.bed_requests = [None for _ in range(self.route_length)]
-        self.unit_stops = [None for _ in range(self.route_length)]
-        self.planned_los = [None for _ in range(self.route_length)]
-        self.adjusted_los = [None for _ in range(self.route_length)]
-        self.request_entry_ts = [None for _ in range(self.route_length)]
-        self.entry_ts = [None for _ in range(self.route_length)]
-        self.wait_to_enter = [None for _ in range(self.route_length)]
-        self.request_exit_ts = [None for _ in range(self.route_length)]
-        self.exit_ts = [None for _ in range(self.route_length)]
-        self.wait_to_exit = [None for _ in range(self.route_length)]
-        self.system_exit_ts = None
-
-    def exit_system(self, env, obsystem):
-
-        logging.debug(
-            f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
-
-        # Create dictionaries of timestamps for patient_stop log
-        for stop in range(len(self.unit_stops)):
-            if self.unit_stops[stop] is not None:
-                # noinspection PyUnresolvedReferences
-                timestamps = {'patient_id': self.patient_id,
-                              'patient_type': self.patient_type,
-                              'arrival_type': self.arr_type,
-                              'unit': self.unit_stops[stop],
-                              'request_entry_ts': self.request_entry_ts[stop],
-                              'entry_ts': self.entry_ts[stop],
-                              'request_exit_ts': self.request_exit_ts[stop],
-                              'exit_ts': self.exit_ts[stop],
-                              'planned_los': self.planned_los[stop],
-                              'adjusted_los': self.adjusted_los[stop],
-                              'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
-                              'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
-                              'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
-                              'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
-                              'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
-                              'wait_to_enter': self.wait_to_enter[stop],
-                              'wait_to_exit': self.wait_to_exit[stop],
-                              'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
-                              'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
-
-                obsystem.stops_timestamps_list.append(timestamps)
-
-    def __repr__(self):
-        return "patientuid: {}, patient_type: {}, time: {}". \
-            format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
 
-class OBStaticRouter(object):
-    def __init__(self, env, obsystem, routes, rg):
-        """
-        TODO: New routing scheme
 
-        Parameters
-        ----------
-        env
-        obsystem
-        routes
-        rg
-        """
 
-        self.env = env
-        self.obsystem = obsystem
-        self.rg = rg
-
-        # Dict of networkx DiGraph objects
-        self.route_graphs = {}
-
-        # Create route templates from routes list (of unit numbers)
-        for route_name, route in routes.items():
-            route_graph = nx.DiGraph()
-
-            # Add each unit number as a node
-            # for location, data in locations.items():
-            #     route_graph.add_node(location,
-            #                          planned_los=0.0, actual_los=0.0, blocked_duration=0.0,
-            #                          name=location)
-
-            # Add edges - simple serial route in this case
-            for edge in route['edges']:
-                route_graph.add_edge(edge['from'], edge['to'])
-
-            for node in route_graph.nodes():
-                nx.set_node_attributes(route_graph,
-                                       {node: {'planned_los': 0.0, 'actual_los': 0.0, 'blocked_duration': 0.0}})
-
-            # Each patient will eventually end up with their own copy of the route since
-            # it will contain LOS values
-            self.route_graphs[route_name] = route_graph.copy()
-            logging.debug(f"{self.env.now:.4f}: route graph {route_name} - {route_graph.edges}")
-
-    def create_route(self, patient_type, los_distributions, entry_delay=0):
-        """
-
-        Parameters
-        ----------
-        patient_type
-        los_distributions
-        entry_delay
-
-        Returns
-        -------
-
-        Notes
-        -----
-
-        """
-
-        # Copy the route template to create new graph object
-        route_graph = deepcopy(self.route_graphs[patient_type])
-
-        # Sample from los distributions for planned_los
-        for unit, data in route_graph.nodes(data=True):
-            if unit == ENTRY:
-                # Entry delays are used to model scheduled procedures. Delay
-                # time is number of time units from start of current week
-                route_graph.nodes[unit]['planned_los'] = entry_delay
-            elif unit == EXIT:
-                route_graph.nodes[unit]['planned_los'] = 0.0
-            else:
-                route_graph.nodes[unit]['planned_los'] = los_distributions[patient_type][unit]()
-
-        return route_graph
-
-    def get_next_unit_id(self, obpatient):
-
-        G = obpatient.route_graph
-        successors = [n for n in G.successors(obpatient.current_unit_id)]
-        next_unit_id = successors[0]
-
-        if next_unit_id is None:
-            logging.error(
-                f"{self.env.now:.4f}: {obpatient.patient_id} has no next unit at {obpatient.current_unit_id}.")
-            exit(1)
-
-        logging.debug(
-            f"{self.env.now:.4f}: {obpatient.patient_id} current_unit_id {obpatient.current_unit_id}, next_unit_id {next_unit_id}")
-        return next_unit_id
 
 
 class OBPatientGeneratorPoisson:
@@ -804,8 +845,9 @@ def process_command_line(argv=None):
     return args
 
 
-def simulate(config, rep_num):
+def simulate(config: OBConfig, rep_num: int):
     """
+    Run one replication of simulation model.
 
     Parameters
     ----------
@@ -814,7 +856,7 @@ def simulate(config, rep_num):
 
     Returns
     -------
-
+    Dict: Summary statistics for the replication
 
     """
 
