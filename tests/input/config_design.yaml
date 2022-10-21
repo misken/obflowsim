@@ -1,5 +1,37 @@
 scenario: 1
 
+run_settings:
+  num_replications: 5
+  run_time: 7200
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional stopping condition
+  # max_arrivals = 10000
+  
+  # h = hours, d = days
+  base_time_unit: h
+  
+  # Comment out start_date line to use default of 1970-01-05
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2022-02-01
+  
+ 
+outputs:
+  occ_logs:
+    path: ./output/logs
+    write: 1
+  occ_stats:
+    path: ./output/stats
+    write: 1
+  stop_logs:
+    path: ./output/logs
+    write: 1
+  summary_stats:
+    path: ./output/stats
+    write: 1
+
 # A rate of 0.0 will shut off the arrival stream
 rand_arrival_rates:
     spont_labor: 0.20
@@ -48,7 +80,7 @@ los_params:
     num_erlang_stages_pp_nondelivery: 4
 
 # You can use a restricted set of numpy distributions parameterized via
-# constants are user defined parameters in the los_params section.  
+# constants that are user defined parameters in the los_params section.  
 los_distributions:
     RAND_SPONT_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
@@ -83,8 +115,6 @@ los_distributions:
     RAND_NONDELIV_PP:
         PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
-
-
 # Do we need id's for the locations since this model has fixed set
 # of locations? Is the name attribute used?
 
@@ -118,6 +148,7 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
+      blocking_adjustment: delay
     - from: LDR
       id: LDR_PP
       to: PP
@@ -132,6 +163,7 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
+      blocking_adjustment: delay
     - from: LDR
       id: LDR_CSECT
       to: CSECT
@@ -149,6 +181,7 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
+      blocking_adjustment: delay
     - from: LDR
       id: LDR_PP
       to: PP
@@ -163,6 +196,7 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
+      blocking_adjustment: delay
     - from: LDR
       id: LDR_CSECT
       to: CSECT
@@ -227,35 +261,5 @@ routes:
 
     
     
-run_settings:
-  num_replications: 5
-  run_time: 7200
-  warmup_time: 1200
-  
-  # Uncomment the following to use max_arrivals as additional stopping condition
-  # max_arrivals = 10000
-  
-  # h = hours, d = days
-  base_time_unit: h
-  
-  # Comment out start_date line to use default of 1970-01-05
-  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
-  # use_calendar_time = 1 for yes, 0 for no
-  use_calendar_time: 1
-  start_date: 2022-02-01
-  
- 
-outputs:
-  occ_logs:
-    path: ./output/logs
-    write: 1
-  occ_stats:
-    path: ./output/stats
-    write: 1
-  stop_logs:
-    path: ./output/logs
-    write: 1
-  summary_stats:
-    path: ./output/stats
-    write: 1
+
 

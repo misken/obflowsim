@@ -1,11 +1,11 @@
 import sys
 import logging
+from logging import Logger
 from enum import Enum
 from copy import deepcopy
 from pathlib import Path
 import argparse
 from pprint import pprint
-from __future__ import annotations
 
 from typing import (
     TYPE_CHECKING,
@@ -18,8 +18,8 @@ from numpy.typing import (
     DTypeLike,
 )
 
-if TYPE_CHECKING and TYPE_CHECKING != 'SPHINX':  # Avoid circular import
-    from simpy.core import Environment
+#if TYPE_CHECKING and TYPE_CHECKING != 'SPHINX':  # Avoid circular import
+from simpy.core import Environment
 
 import pandas as pd
 import numpy as np
@@ -60,7 +60,35 @@ Details:
 
 class OBConfig:
     """
+    OBConfig is the class used to store simulation scenario instance configuration information.
 
+    Attributes
+    ----------
+    scenario : str
+        scenario identifier used in output filenames
+    run_time : float
+        length of simulation run in base time units
+    warmup_time : float
+        time after which steady state simulation output statistics begin to be computed
+    num_replications : int
+        the number of independent replications of the simulation model
+    rg : dict
+        key is 'arrivals' or 'los' and value is a `numpy.random.default_rng` object. The seed
+        value is based on `config_dict['random_number_streams']`, which has same key values
+    rand_arrival_rates : dict of floats
+        keys are valid arrival stream identifiers (see documentation for the config file). Units are the
+        mean number of arrivals per base time unit. These means are used with the `OBPatientGeneratorPoisson`
+        class for generating unscheduled (random) arrivals.
+    rand_arrival_toggles : dict of ints
+        same keys as `rand_arrival_rates` with a value of 0 shutting off the arrival stream and 1 enabling
+        the arrival stream.
+
+
+
+    Methods
+    -------
+    says(sound=None)
+        Prints the animals name and what sound it makes
     """
 
     def __init__(self, config_dict: Dict):
@@ -71,9 +99,8 @@ class OBConfig:
         self.num_replications = config_dict['run_settings']['num_replications']
 
         # Create random number generators
-        self.random_number_streams = config_dict['random_number_streams']
         self.rg = {}
-        for stream, seed in self.random_number_streams.items():
+        for stream, seed in config_dict['random_number_streams'].items():
             self.rg[stream] = default_rng(seed)
 
         # Arrival rates
@@ -145,8 +172,156 @@ class SimCalendar:
         elapsed_timedelta = sim_calendar_time - self.start_date
         return elapsed_timedelta / pd.to_timedelta(1, unit=self.base_time_unit)
 
+class PatientType(Enum):
+    """
+    # Patient Type and Patient Flow Definitions
+
+    # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
+    # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
+    # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
+    # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
+    # Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
+    # Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
+    # Type 7: sched arrival, C-section delivery, route = 1-3-2-4
+
+    # Type 8: urgent induced arrival, regular delivery, route = 1-2-4
+    # Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
+
+    # Type 10: random arrival, non-delivered LD, route = 1
+    # Type 11: random arrival, non-delivered PP route = 4
+    """
+    RAND_SPONT_REG = 'RAND_SPONT_REG'
+    RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
+    RAND_AUG_REG = 'RAND_AUG_REG'
+    RAND_AUG_CSECT = 'RAND_AUG_CSECT'
+    SCHED_IND_REG = 'SCHED_IND_REG'
+    SCHED_IND_CSECT = 'SCHED_IND_CSECT'
+    SCHED_CSECT = 'SCHED_CSECT'
+    URGENT_IND_REG = 'URGENT_IND_REG'
+    URGENT_IND_CSECT = 'URGENT_IND_CSECT'
+    RAND_NONDELIV_LDR = 'RAND_NONDELIV_LDR'
+    RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
 
 
+class ArrivalType(Enum):
+    """
+
+    """
+    SPONT_LABOR = 'spont_labor'
+    URGENT_INDUCED_LABOR = 'urgent_induced_labor'
+    NON_DELIVERY_LDR = 'non_delivery_ldr'
+    NON_DELIVERY_PP = 'non_delivery_pp'
+    SCHED_CSECT = 'sched_csect'
+    SCHED_INDUCED_LABOR = 'sched_induced_labor'
+
+
+class PatientTypeArrivalType:
+
+    pat_type_to_arrival_type = {
+        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
+        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR.value,
+        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR.value,
+        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT.value,
+        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR.value,
+        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR.value,
+        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR.value,
+        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
+    }
+
+# class OBunitId(IntEnum):
+#     ENTRY = 0
+#     OBS = 1
+#     LDR = 2
+#     CSECT = 3
+#     PP = 4
+#     LDRP = 5
+#     LD = 6
+#     RECOVERY = 8
+#     EXIT = 8
+
+
+class OBPatient:
+    """
+
+    """
+
+    def __init__(self, patient_id: str, patient_type: PatientType, arr_type: ArrivalType,
+                 arr_time: float, los_distributions: Dict, entry_delay: float = 0):
+        """
+
+        Parameters
+        ----------
+
+        """
+        self.system_arrival_ts = arr_time
+        self.patient_id = patient_id
+        self.patient_type = patient_type
+        self.arr_type = arr_type
+        self.router = router
+        self.entry_delay = entry_delay
+
+        # Initialize unit stop attributes
+        self.current_stop_num = -1
+        self.previous_unit_id = None
+        self.current_unit_id = None
+        self.next_unit_id = None
+
+        # Determine route
+        self.route_graph = router.create_route(self.patient_type,
+                                               los_distributions, self.entry_delay)
+        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
+
+        # Since we have fixed route, just initialize full list to hold bed requests
+        # The index numbers are stop numbers and so slot 0 is for ENTRY location
+        self.bed_requests = [None for _ in range(self.route_length)]
+        self.unit_stops = [None for _ in range(self.route_length)]
+        self.planned_los = [None for _ in range(self.route_length)]
+        self.adjusted_los = [None for _ in range(self.route_length)]
+        self.request_entry_ts = [None for _ in range(self.route_length)]
+        self.entry_ts = [None for _ in range(self.route_length)]
+        self.wait_to_enter = [None for _ in range(self.route_length)]
+        self.request_exit_ts = [None for _ in range(self.route_length)]
+        self.exit_ts = [None for _ in range(self.route_length)]
+        self.wait_to_exit = [None for _ in range(self.route_length)]
+        self.system_exit_ts = None
+
+    def exit_system(self, env, obsystem):
+
+        logging.debug(
+            f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
+
+        # Create dictionaries of timestamps for patient_stop log
+        for stop in range(len(self.unit_stops)):
+            if self.unit_stops[stop] is not None:
+                # noinspection PyUnresolvedReferences
+                timestamps = {'patient_id': self.patient_id,
+                              'patient_type': self.patient_type,
+                              'arrival_type': self.arr_type,
+                              'unit': self.unit_stops[stop],
+                              'request_entry_ts': self.request_entry_ts[stop],
+                              'entry_ts': self.entry_ts[stop],
+                              'request_exit_ts': self.request_exit_ts[stop],
+                              'exit_ts': self.exit_ts[stop],
+                              'planned_los': self.planned_los[stop],
+                              'adjusted_los': self.adjusted_los[stop],
+                              'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
+                              'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
+                              'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
+                              'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
+                              'wait_to_enter': self.wait_to_enter[stop],
+                              'wait_to_exit': self.wait_to_exit[stop],
+                              'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
+                              'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
+
+                obsystem.stops_timestamps_list.append(timestamps)
+
+    def __repr__(self):
+        return "patientuid: {}, patient_type: {}, time: {}". \
+            format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
 class OBsystem:
     """
@@ -232,7 +407,7 @@ class OBStaticRouter(object):
         # TODO: Implement route validation rules
         return True
 
-    def create_route(self, patient_type: PatientType, los_distributions: Dict, entry_delay: float = 0) -> DiGraph:
+    def create_route(self, patient_type: Enum, los_distributions: Dict, entry_delay: float = 0) -> DiGraph:
         """
 
         Parameters
@@ -268,7 +443,7 @@ class OBStaticRouter(object):
 
         return route_graph
 
-    def get_next_unit_id(self, obpatient: OBPatient):
+    def get_next_unit_id(self, obpatient: type(OBPatient)):
         """
         Get next unit in route
 
@@ -298,159 +473,6 @@ class OBStaticRouter(object):
         logging.debug(
             f"{self.env.now:.4f}: {obpatient.patient_id} current_unit_id {obpatient.current_unit_id}, next_unit_id {next_unit_id}")
         return next_unit_id
-
-
-class PatientType(Enum):
-    """
-    # Patient Type and Patient Flow Definitions
-
-    # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
-    # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
-    # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
-    # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
-    # Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
-    # Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
-    # Type 7: sched arrival, C-section delivery, route = 1-3-2-4
-
-    # Type 8: urgent induced arrival, regular delivery, route = 1-2-4
-    # Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
-
-    # Type 10: random arrival, non-delivered LD, route = 1
-    # Type 11: random arrival, non-delivered PP route = 4
-    """
-    RAND_SPONT_REG = 'RAND_SPONT_REG'
-    RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
-    RAND_AUG_REG = 'RAND_AUG_REG'
-    RAND_AUG_CSECT = 'RAND_AUG_CSECT'
-    SCHED_IND_REG = 'SCHED_IND_REG'
-    SCHED_IND_CSECT = 'SCHED_IND_CSECT'
-    SCHED_CSECT = 'SCHED_CSECT'
-    URGENT_IND_REG = 'URGENT_IND_REG'
-    URGENT_IND_CSECT = 'URGENT_IND_CSECT'
-    RAND_NONDELIV_LDR = 'RAND_NONDELIV_LDR'
-    RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
-
-
-class ArrivalType(Enum):
-    """
-
-    """
-    SPONT_LABOR = 'spont_labor'
-    URGENT_INDUCED_LABOR = 'urgent_induced_labor'
-    NON_DELIVERY_LDR = 'non_delivery_ldr'
-    NON_DELIVERY_PP = 'non_delivery_pp'
-    SCHED_CSECT = 'sched_csect'
-    SCHED_INDUCED_LABOR = 'sched_induced_labor'
-
-
-class PatientTypeArrivalType:
-
-    pat_type_to_arrival_type = {
-        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT.value,
-        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR.value,
-        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
-    }
-
-# class OBunitId(IntEnum):
-#     ENTRY = 0
-#     OBS = 1
-#     LDR = 2
-#     CSECT = 3
-#     PP = 4
-#     LDRP = 5
-#     LD = 6
-#     RECOVERY = 8
-#     EXIT = 8
-
-
-class OBPatient:
-    """
-
-    """
-
-    def __init__(self, patient_id: str, patient_type: PatientType, arr_type: ArrivalType,
-                 arr_time: float, router: OBStaticRouter,
-                 los_distributions: Dict, entry_delay: float = 0):
-        """
-
-        Parameters
-        ----------
-
-        """
-        self.system_arrival_ts = arr_time
-        self.patient_id = patient_id
-        self.patient_type = patient_type
-        self.arr_type = arr_type
-        self.router = router
-        self.entry_delay = entry_delay
-
-        # Initialize unit stop attributes
-        self.current_stop_num = -1
-        self.previous_unit_id = None
-        self.current_unit_id = None
-        self.next_unit_id = None
-
-        # Determine route
-        self.route_graph = router.create_route(self.patient_type,
-                                               los_distributions, self.entry_delay)
-        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
-
-        # Since we have fixed route, just initialize full list to hold bed requests
-        # The index numbers are stop numbers and so slot 0 is for ENTRY location
-        self.bed_requests = [None for _ in range(self.route_length)]
-        self.unit_stops = [None for _ in range(self.route_length)]
-        self.planned_los = [None for _ in range(self.route_length)]
-        self.adjusted_los = [None for _ in range(self.route_length)]
-        self.request_entry_ts = [None for _ in range(self.route_length)]
-        self.entry_ts = [None for _ in range(self.route_length)]
-        self.wait_to_enter = [None for _ in range(self.route_length)]
-        self.request_exit_ts = [None for _ in range(self.route_length)]
-        self.exit_ts = [None for _ in range(self.route_length)]
-        self.wait_to_exit = [None for _ in range(self.route_length)]
-        self.system_exit_ts = None
-
-    def exit_system(self, env, obsystem):
-
-        logging.debug(
-            f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
-
-        # Create dictionaries of timestamps for patient_stop log
-        for stop in range(len(self.unit_stops)):
-            if self.unit_stops[stop] is not None:
-                # noinspection PyUnresolvedReferences
-                timestamps = {'patient_id': self.patient_id,
-                              'patient_type': self.patient_type,
-                              'arrival_type': self.arr_type,
-                              'unit': self.unit_stops[stop],
-                              'request_entry_ts': self.request_entry_ts[stop],
-                              'entry_ts': self.entry_ts[stop],
-                              'request_exit_ts': self.request_exit_ts[stop],
-                              'exit_ts': self.exit_ts[stop],
-                              'planned_los': self.planned_los[stop],
-                              'adjusted_los': self.adjusted_los[stop],
-                              'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
-                              'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
-                              'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
-                              'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
-                              'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
-                              'wait_to_enter': self.wait_to_enter[stop],
-                              'wait_to_exit': self.wait_to_exit[stop],
-                              'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
-                              'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
-
-                obsystem.stops_timestamps_list.append(timestamps)
-
-    def __repr__(self):
-        return "patientuid: {}, patient_type: {}, time: {}". \
-            format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
 
 class OBunit:
@@ -627,12 +649,6 @@ class OBunit:
             format(self.name, self.num_entries, self.num_exits,
                    self.unit.count, alos)
         return msg
-
-
-
-
-
-
 
 
 class OBPatientGeneratorPoisson:
@@ -962,6 +978,27 @@ def simulate(config: OBConfig, rep_num: int):
     return scenario_rep_summary_dict
 
 
+def logger_setup(loglevel: int) -> Logger:
+    """Create and setup logger"""
+    logger = logging.getLogger()
+    logger.setLevel(loglevel)
+
+    # Create the Handler for logging data to console.
+    logger_handler = logging.StreamHandler()
+    logger_handler.setLevel(loglevel)
+
+    # Create a Formatter for formatting the log messages
+    logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # Add the Formatter to the Handler
+    logger_handler.setFormatter(logger_formatter)
+
+    # Add the Handler to the Logger
+    logger.addHandler(logger_handler)
+
+    return logger
+
+
 def main(argv=None):
     """
 
@@ -978,22 +1015,22 @@ def main(argv=None):
     args = process_command_line(argv)
 
     # Create root logger
-    # TODO - decide on logging vs structlog vs loguru
-    logger = logging.getLogger()
-    logger.setLevel(args.loglevel)
-
-    # Create the Handler for logging data to console.
-    logger_handler = logging.StreamHandler()
-    logger_handler.setLevel(args.loglevel)
-
-    # Create a Formatter for formatting the log messages
-    logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    # Add the Formatter to the Handler
-    logger_handler.setFormatter(logger_formatter)
-
-    # Add the Handler to the Logger
-    logger.addHandler(logger_handler)
+    logger = logger_setup(args.loglevel)
+    # logger = logging.getLogger()
+    # logger.setLevel(args.loglevel)
+    #
+    # # Create the Handler for logging data to console.
+    # logger_handler = logging.StreamHandler()
+    # logger_handler.setLevel(args.loglevel)
+    #
+    # # Create a Formatter for formatting the log messages
+    # logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    #
+    # # Add the Formatter to the Handler
+    # logger_handler.setFormatter(logger_formatter)
+    #
+    # # Add the Handler to the Logger
+    # logger.addHandler(logger_handler)
 
     # Quick setup of root logger
     # logging.basicConfig(
@@ -1007,6 +1044,8 @@ def main(argv=None):
     # Load scenario configuration file and create OBConfig object
     config_dict = obio.load_config(args.config)
     config = OBConfig(config_dict)
+
+    # Initialize scenario specific variables
     scenario = config.scenario
     summary_stat_path = \
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')

@@ -32,10 +32,11 @@ ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'unifor
 
 def load_config(cfg):
     """
+    Load YAML configuration file
 
     Parameters
     ----------
-    cfg : str, configuration filename
+    cfg : str, YAML configuration filename
 
     Returns
     -------
@@ -270,7 +271,8 @@ def process_command_line(argv=None):
 
     # Create the parser
     parser = argparse.ArgumentParser(prog='obflow_io',
-                                     description='create the main output summary file with one row per (scenario, replication) pair')
+                                     description='create the main output summary file with one row per (scenario, '
+                                                 'replication) pair')
 
     # Add arguments
     parser.add_argument(

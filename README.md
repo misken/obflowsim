@@ -13,7 +13,7 @@ of this model was developed for a simulation metamodeling research project
 [obflowsim-mm](https://github.com/misken/obflowsim-mm). This obflowsim
 repo is the home for continued development of the core discrete event
 simulation (DES) model. Active development is happening on the `develop`
-branch whereas the `main` branch contains the original simplified 
+branch (and sub-branches off of `develop`) whereas the `main` branch contains the original simplified 
 model used in the research project.
 
 The next generation of the simulation model will include a number of
