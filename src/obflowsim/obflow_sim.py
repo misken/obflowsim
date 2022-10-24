@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 import argparse
 from pprint import pprint
+from abc import ABC, abstractmethod
 
 from typing import (
     TYPE_CHECKING,
@@ -172,6 +173,7 @@ class SimCalendar:
         elapsed_timedelta = sim_calendar_time - self.start_date
         return elapsed_timedelta / pd.to_timedelta(1, unit=self.base_time_unit)
 
+
 class PatientType(Enum):
     """
     # Patient Type and Patient Flow Definitions
@@ -323,6 +325,7 @@ class OBPatient:
         return "patientuid: {}, patient_type: {}, time: {}". \
             format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
+
 class OBsystem:
     """
     Purpose:
@@ -351,6 +354,28 @@ class OBsystem:
 
         # Create list to hold timestamps dictionaries (one per patient)
         self.stops_timestamps_list = []
+
+
+class Router(ABC):
+
+    @abstractmethod
+    def validate_route_graph(self, route_graph: DiGraph) -> bool:
+        """
+        Determine if a route is considered valid
+
+        Parameters
+        ----------
+        route_graph
+
+        Returns
+        -------
+        True if route is valid
+        """
+        pass
+
+    @abstractmethod
+    def get_next_stop(self, obpatient: type(OBPatient)):
+        log.debug('Creating sale invoice', sale)
 
 
 class OBStaticRouter(object):
@@ -443,7 +468,7 @@ class OBStaticRouter(object):
 
         return route_graph
 
-    def get_next_unit_id(self, obpatient: type(OBPatient)):
+    def get_next_stop(self, obpatient: type(OBPatient)):
         """
         Get next unit in route
 
@@ -597,7 +622,7 @@ class OBunit:
         # Go to next destination (which could be EXIT)
         if obpatient.current_unit_id != EXIT:
             # Determine next stop in route and try to get a bed in that unit
-            obpatient.next_unit_id = obpatient.router.get_next_unit_id(obpatient)
+            obpatient.next_unit_id = obpatient.router.get_next_stop(obpatient)
             self.env.process(obsystem.obunits[obpatient.next_unit_id].put(obpatient, obsystem))
         else:
             # Patient is ready to exit system
