@@ -375,7 +375,7 @@ class Router(ABC):
 
     @abstractmethod
     def get_next_stop(self, obpatient: type(OBPatient)):
-        log.debug('Creating sale invoice', sale)
+        pass
 
 
 class OBStaticRouter(object):
