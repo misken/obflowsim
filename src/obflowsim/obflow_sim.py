@@ -245,24 +245,29 @@ class PatientTypeArrivalType:
 #     EXIT = 8
 
 
-class OBPatient:
+class Patient:
     """
 
     """
 
-    def __init__(self, patient_id: str, patient_type: PatientType, arr_type: ArrivalType,
+    def __init__(self, patient_id: str, patient_type: PatientType, arrival_type: ArrivalType,
                  arr_time: float, los_distributions: Dict, entry_delay: float = 0):
         """
 
         Parameters
         ----------
-
+        patient_id
+        patient_type
+        arrival_type
+        arr_time
+        los_distributions
+        entry_delay : float
+            Length of time to hold patient in ENTRY node before routing to first location
         """
-        self.system_arrival_ts = arr_time
         self.patient_id = patient_id
         self.patient_type = patient_type
-        self.arr_type = arr_type
-        self.router = router
+        self.arrival_type = arrival_type
+        self.system_arrival_ts = arr_time
         self.entry_delay = entry_delay
 
         # Initialize unit stop attributes
@@ -271,23 +276,38 @@ class OBPatient:
         self.current_unit_id = None
         self.next_unit_id = None
 
+        # Initialize route related attributes
+        self.route_graph = None
+        self.bed_requests = []
+        self.unit_stops = []
+        self.planned_los = []
+        self.adjusted_los = []
+        self.request_entry_ts = []
+        self.entry_ts = []
+        self.wait_to_enter = []
+        self.request_exit_ts = []
+        self.exit_ts = []
+        self.wait_to_exit = []
+        self.system_exit_ts = None
+
+
         # Determine route
-        self.route_graph = router.create_route(self.patient_type,
-                                               los_distributions, self.entry_delay)
-        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
+        # self.route_graph = router.create_route(self.patient_type,
+        #                                        los_distributions, self.entry_delay)
+        # self.route_graph = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
 
         # Since we have fixed route, just initialize full list to hold bed requests
         # The index numbers are stop numbers and so slot 0 is for ENTRY location
-        self.bed_requests = [None for _ in range(self.route_length)]
-        self.unit_stops = [None for _ in range(self.route_length)]
-        self.planned_los = [None for _ in range(self.route_length)]
-        self.adjusted_los = [None for _ in range(self.route_length)]
-        self.request_entry_ts = [None for _ in range(self.route_length)]
-        self.entry_ts = [None for _ in range(self.route_length)]
-        self.wait_to_enter = [None for _ in range(self.route_length)]
-        self.request_exit_ts = [None for _ in range(self.route_length)]
-        self.exit_ts = [None for _ in range(self.route_length)]
-        self.wait_to_exit = [None for _ in range(self.route_length)]
+        # self.bed_requests = [None for _ in range(self.route_length)]
+        # self.unit_stops = [None for _ in range(self.route_length)]
+        # self.planned_los = [None for _ in range(self.route_length)]
+        # self.adjusted_los = [None for _ in range(self.route_length)]
+        # self.request_entry_ts = [None for _ in range(self.route_length)]
+        # self.entry_ts = [None for _ in range(self.route_length)]
+        # self.wait_to_enter = [None for _ in range(self.route_length)]
+        # self.request_exit_ts = [None for _ in range(self.route_length)]
+        # self.exit_ts = [None for _ in range(self.route_length)]
+        # self.wait_to_exit = [None for _ in range(self.route_length)]
         self.system_exit_ts = None
 
     def exit_system(self, env, obsystem):
@@ -301,7 +321,7 @@ class OBPatient:
                 # noinspection PyUnresolvedReferences
                 timestamps = {'patient_id': self.patient_id,
                               'patient_type': self.patient_type,
-                              'arrival_type': self.arr_type,
+                              'arrival_type': self.arrival_type,
                               'unit': self.unit_stops[stop],
                               'request_entry_ts': self.request_entry_ts[stop],
                               'entry_ts': self.entry_ts[stop],
@@ -374,7 +394,7 @@ class Router(ABC):
         pass
 
     @abstractmethod
-    def get_next_stop(self, obpatient: type(OBPatient)):
+    def get_next_stop(self, obpatient: type(Patient)):
         pass
 
 
@@ -468,13 +488,13 @@ class OBStaticRouter(object):
 
         return route_graph
 
-    def get_next_stop(self, obpatient: type(OBPatient)):
+    def get_next_stop(self, obpatient: type(Patient)):
         """
         Get next unit in route
 
         Parameters
         ----------
-        obpatient: OBPatient
+        obpatient: Patient
 
         Returns
         -------
@@ -534,7 +554,7 @@ class OBunit:
         # Create list to hold occupancy tuples (time, occ)
         self.occupancy_list = [(0.0, 0.0)]
 
-    def put(self, obpatient: OBPatient, obsystem: OBsystem):
+    def put(self, obpatient: Patient, obsystem: OBsystem):
         """
         A process method called when a bed is requested in the unit.
 
@@ -676,17 +696,88 @@ class OBunit:
         return msg
 
 
-class OBPatientGeneratorPoisson:
-    """ Generates patients according to a stationary Poisson process.
+class PoissonArrivals:
+    """ Generates patients according to a stationary Poisson process with specified rate.
 
         Parameters
         ----------
         env : simpy.Environment
             the simulation environment
+        uid : str
+            unique name of random arrival stream
+        arrival_rate : float
+            Poisson arrival rate (expected number of arrivals per unit time)
+        arrival_stream_rg : numpy.random.Generator
+            used for interarrival time generation
+        stop_time : float
+            Stops generation at the stoptime. (default Infinity)
+        max_arrivals : int
+            Stops generation after max_arrivals. (default Infinity)
+        entity_cls : Class (Default is None)
+            Each arrival creates an instance of this class
+        kwargs : dict
+            additional arguments to pass to entity_cls.__init__
+    """
+
+    def __init__(self, env, uid, arrival_rate, arrival_stream_rg,
+                 stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity,
+                 entity_cls=None, **kwargs):
+
+        # Parameter attributes
+        self.env = env
+        self.uid = uid
+        self.arr_rate = arrival_rate
+        self.arr_stream_rg = arrival_stream_rg
+        self.stop_time = stop_time
+        self.max_arrivals = max_arrivals
+        self.entity_cls = entity_cls
+
+        # State attributes
+        self.num_entities_created = 0
+
+        # Trigger the run() method and register it as a SimPy process
+        env.process(self.run())
+
+    def run(self):
+        """
+        Generate entities until stopping condition met
+        """
+
+        # Main entity creation loop that terminates when stoptime reached
+        while self.env.now < self.stop_time and \
+                self.num_entities_created < self.max_arrivals:
+            # Compute next interarrival time
+            iat = self.arr_stream_rg.exponential(1.0 / self.arr_rate)
+            # Delay until time for next arrival
+            yield self.env.timeout(iat)
+            self.num_entities_created += 1
+            patient_type = self.assign_patient_type()
+            new_patient_id = f'{patient_type}_{self.num_entities_created}'
+            # Create new patient
+            obpatient = Patient(
+                new_patient_id, patient_type, self.uid, self.env.now, self.config.los_distributions)
+
+            logging.debug(
+                f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
+
+            # Initiate process of patient entering system
+            self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
+
+
+
+
+
+class OBPatientGeneratorPoisson:
+    """ Generates patients according to a stationary Poisson process.
+
+        Parameters
+        ----------
+        uid : str
+            name of random arrival stream
+        env : simpy.Environment
+            the simulation environment
         obsystem : OBSystem
             the OB system containing the obunits list
-        router : OBStaticRouter like
-            used to route new arrival to first location
         arr_rate : float
             Poisson arrival rate (expected number of arrivals per unit time)
         arr_stream_rg : numpy.random.Generator
@@ -698,14 +789,13 @@ class OBPatientGeneratorPoisson:
 
     """
 
-    def __init__(self, uid, env, config, obsystem, router, arr_rate, arr_stream_rg,
+    def __init__(self, uid, env, config, obsystem, arr_rate, arr_stream_rg,
                  stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
 
         self.uid = uid
         self.env = env
         self.config = config
         self.obsystem = obsystem
-        self.router = router
         self.arr_rate = arr_rate
         self.arr_stream_rg = arr_stream_rg
         self.stop_time = stop_time
@@ -732,9 +822,8 @@ class OBPatientGeneratorPoisson:
             patient_type = self.assign_patient_type()
             new_patient_id = f'{patient_type}_{self.num_patients_created}'
             # Create new patient
-            obpatient = OBPatient(
-                new_patient_id, patient_type, self.uid, self.env.now, self.router,
-                self.config.los_distributions)
+            obpatient = Patient(
+                new_patient_id, patient_type, self.uid, self.env.now, self.config.los_distributions)
 
             logging.debug(
                 f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
@@ -833,7 +922,7 @@ class OBPatientGeneratorWeeklyStaticSchedule:
                     patient_type = self.assign_patient_type()
                     new_patient_id = f'{patient_type}_{self.num_patients_created}'
                     # Create new patient
-                    obpatient = OBPatient(
+                    obpatient = Patient(
                         new_patient_id, patient_type, self.uid, self.env.now, self.router,
                         self.config.los_distributions, entry_delay=time_of_week)
 
