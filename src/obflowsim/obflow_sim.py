@@ -666,7 +666,7 @@ class PatientCareUnit:
         # Go to next destination (which could be EXIT)
         if patient.current_unit_id != EXIT:
             # Determine next stop in route and try to get a bed in that unit
-            patient.next_unit_id = patient.router.get_next_stop(patient)
+            patient.next_unit_id = patient.patient_flow_system.router.get_next_stop(patient)
             self.env.process(obsystem.patient_care_units[patient.next_unit_id].put(patient, obsystem))
         else:
             # Patient is ready to exit system
