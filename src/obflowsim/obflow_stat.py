@@ -31,7 +31,7 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
     occ_stats_dfs = []
     occ_dfs = []
 
-    for unit_name, unit in obsystem.obunits.items():
+    for unit_name, unit in obsystem.patient_care_units.items():
         # Only compute if at least onc change in occupancy during simulation
         if len(unit.occupancy_list) > 1:
             occ = unit.occupancy_list

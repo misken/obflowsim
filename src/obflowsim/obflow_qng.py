@@ -3,12 +3,12 @@ import logging
 import numpy as np
 import networkx as nx
 
-from obflow_sim import OBConfig
+from obflow_sim import Config
 from obflow_sim import PatientType
 
 logger = logging.getLogger(__name__)
 
-def unit_loads(config: OBConfig):
+def unit_loads(config: Config):
 
     # Determine arrival rate to each unit by patient type
 
@@ -41,7 +41,7 @@ def unit_loads(config: OBConfig):
 
     return load, traffic_intensity
 
-def spont_labor_subrates(config: OBConfig):
+def spont_labor_subrates(config: Config):
 
     # Determine arrival rate to each unit by patient type
 
@@ -77,7 +77,7 @@ def spont_labor_subrates(config: OBConfig):
 
     # Compute overall load and traffic intensity at each unit
 
-def scheduled_subrates(config: OBConfig):
+def scheduled_subrates(config: Config):
 
     scheduled_subrate = {}
     pct_sched_ind_to_c = config.branching_probabilities['pct_sched_ind_to_c']
@@ -98,7 +98,7 @@ def scheduled_subrates(config: OBConfig):
 
     return scheduled_subrate
 
-def non_delivery_subrates(config: OBConfig):
+def non_delivery_subrates(config: Config):
 
     non_delivery_subrate = {}
 

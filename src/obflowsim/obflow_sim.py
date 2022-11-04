@@ -59,7 +59,7 @@ Details:
 """
 
 
-class OBConfig:
+class Config:
     """
     OBConfig is the class used to store simulation scenario instance configuration information.
 
@@ -156,7 +156,7 @@ class SimCalendar:
 
     """
 
-    def __init__(self, env: 'Environment', config: OBConfig):
+    def __init__(self, env: 'Environment', config: Config):
         self.env = env
         self.start_date = config.start_date
         self.base_time_unit = config.base_time_unit
@@ -191,6 +191,8 @@ class PatientType(Enum):
 
     # Type 10: random arrival, non-delivered LD, route = 1
     # Type 11: random arrival, non-delivered PP route = 4
+
+    TODO - Python 3.11 has strEnum
     """
     RAND_SPONT_REG = 'RAND_SPONT_REG'
     RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
@@ -245,13 +247,42 @@ class PatientTypeArrivalType:
 #     EXIT = 8
 
 
+
+
+
+class PatientFlowSystem:
+    """
+    Acts as a container for inputs such as the config and the `SimCalendar` as well as for
+    system objects created from these inputs and (maybe) timestamp dicts
+
+    Instead of passing around the above individually, just pass this system object around
+
+    """
+
+    def __init__(self, env: Environment, config: Config, sim_calendar: SimCalendar):
+
+        self.env = env
+        self.sim_calendar = sim_calendar
+        self.los_distributions = config['los_distributions']
+
+        # Create units container and individual patient care units
+        self.patient_care_units = {}
+        for location, data in config['locations'].items():
+            self.patient_care_units[location] = PatientCareUnit(env, name=location, capacity=data['capacity'])
+
+        # Create list to hold timestamps dictionaries (one per patient stop)
+        self.patient_timestamps_list = []
+
+        # Create list to hold timestamps dictionaries (one per patient)
+        self.stops_timestamps_list = []
+
 class Patient:
     """
 
     """
 
-    def __init__(self, patient_id: str, patient_type: PatientType, arrival_type: ArrivalType,
-                 arr_time: float, los_distributions: Dict, entry_delay: float = 0):
+    def __init__(self, patient_id: str, arrival_type: ArrivalType,
+                 arr_time: float, patient_flow_system: PatientFlowSystem, entry_delay: float = 0):
         """
 
         Parameters
@@ -265,10 +296,11 @@ class Patient:
             Length of time to hold patient in ENTRY node before routing to first location
         """
         self.patient_id = patient_id
-        self.patient_type = patient_type
+        #self.patient_type = patient_type
         self.arrival_type = arrival_type
         self.system_arrival_ts = arr_time
         self.entry_delay = entry_delay
+        self.patient_flow_system = patient_flow_system
 
         # Initialize unit stop attributes
         self.current_stop_num = -1
@@ -310,6 +342,34 @@ class Patient:
         # self.wait_to_exit = [None for _ in range(self.route_length)]
         self.system_exit_ts = None
 
+        # Initiate process of patient entering system
+        self.env.process(self.patient_flow_system.patient_care_units[ENTRY].put(self))
+
+    def assign_patient_type(self):
+        if self.uid == ArrivalType.SPONT_LABOR.value:
+            # Determine if labor augmented or not
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_aug']:
+                # Augmented labor
+                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_aug_labor_to_c']:
+                    return PatientType.RAND_AUG_CSECT.value
+                else:
+                    return PatientType.RAND_AUG_REG.value
+            else:
+                # Labor not augmented
+                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_to_c']:
+                    return PatientType.RAND_SPONT_CSECT.value
+                else:
+                    return PatientType.RAND_SPONT_REG.value
+        elif self.uid == ArrivalType.NON_DELIVERY_LDR.value:
+            return PatientType.RAND_NONDELIV_LDR.value
+        elif self.uid == ArrivalType.NON_DELIVERY_PP.value:
+            return PatientType.RAND_NONDELIV_PP.value
+        elif self.uid == ArrivalType.URGENT_INDUCED_LABOR.value:
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_urg_ind_to_c']:
+                return PatientType.URGENT_IND_CSECT.value
+            else:
+                return PatientType.URGENT_IND_REG.value
+
     def exit_system(self, env, obsystem):
 
         logging.debug(
@@ -346,36 +406,6 @@ class Patient:
             format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
 
-class OBsystem:
-    """
-    Purpose:
-
-    - acts as a container for the collection of units
-    - acts as a container for the timestamps dictionaries
-
-    Instead of passing around the above individually, just pass this system object around
-
-    """
-
-    def __init__(self, env: 'Environment', locations: Dict, los_distributions: Dict,
-                 sim_calendar: SimCalendar):
-
-        self.env = env
-        self.sim_calendar = sim_calendar
-        self.los_distributions = los_distributions
-
-        # Create units container and individual patient care units
-        self.obunits = {}
-        for location, data in locations.items():
-            self.obunits[location] = OBunit(env, name=location, capacity=data['capacity'])
-
-        # Create list to hold timestamps dictionaries (one per patient stop)
-        self.patient_timestamps_list = []
-
-        # Create list to hold timestamps dictionaries (one per patient)
-        self.stops_timestamps_list = []
-
-
 class Router(ABC):
 
     @abstractmethod
@@ -406,7 +436,7 @@ class OBStaticRouter(object):
         Parameters
         ----------
         env: Environment
-        obsystem: OBsystem
+        obsystem: PatientFlowSystem
         routes: Dict
         """
 
@@ -520,7 +550,7 @@ class OBStaticRouter(object):
         return next_unit_id
 
 
-class OBunit:
+class PatientCareUnit:
     """ Models an OB unit with fixed capacity.
 
         Parameters
@@ -554,7 +584,7 @@ class OBunit:
         # Create list to hold occupancy tuples (time, occ)
         self.occupancy_list = [(0.0, 0.0)]
 
-    def put(self, obpatient: Patient, obsystem: OBsystem):
+    def put(self, obpatient: Patient, obsystem: PatientFlowSystem):
         """
         A process method called when a bed is requested in the unit.
 
@@ -606,7 +636,7 @@ class OBunit:
             obpatient.wait_to_exit[obpatient.current_stop_num - 1] = \
                 self.env.now - obpatient.request_exit_ts[obpatient.current_stop_num - 1]
             obpatient.previous_unit_id = obpatient.unit_stops[obpatient.current_stop_num - 1]
-            previous_unit = obsystem.obunits[obpatient.previous_unit_id]
+            previous_unit = obsystem.patient_care_units[obpatient.previous_unit_id]
             previous_request = obpatient.bed_requests[obpatient.current_stop_num - 1]
             # Release the previous bed
             previous_unit.unit.release(previous_request)
@@ -643,11 +673,11 @@ class OBunit:
         if obpatient.current_unit_id != EXIT:
             # Determine next stop in route and try to get a bed in that unit
             obpatient.next_unit_id = obpatient.router.get_next_stop(obpatient)
-            self.env.process(obsystem.obunits[obpatient.next_unit_id].put(obpatient, obsystem))
+            self.env.process(obsystem.patient_care_units[obpatient.next_unit_id].put(obpatient, obsystem))
         else:
             # Patient is ready to exit system
             obpatient.previous_unit_id = obpatient.unit_stops[obpatient.current_stop_num]
-            previous_unit = obsystem.obunits[obpatient.previous_unit_id]
+            previous_unit = obsystem.patient_care_units[obpatient.previous_unit_id]
             previous_request = obpatient.bed_requests[obpatient.current_stop_num]
             # Release the bed
             previous_unit.unit.release(previous_request)
@@ -703,7 +733,7 @@ class PoissonArrivals:
         ----------
         env : simpy.Environment
             the simulation environment
-        uid : str
+        arrival_stream_uid : str
             unique name of random arrival stream
         arrival_rate : float
             Poisson arrival rate (expected number of arrivals per unit time)
@@ -719,18 +749,19 @@ class PoissonArrivals:
             additional arguments to pass to entity_cls.__init__
     """
 
-    def __init__(self, env, uid, arrival_rate, arrival_stream_rg,
+    def __init__(self, env, arrival_stream_uid, arrival_rate, arrival_stream_rg,
                  stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity,
                  entity_cls=None, **kwargs):
 
         # Parameter attributes
         self.env = env
-        self.uid = uid
+        self.arrival_stream_uid = arrival_stream_uid
         self.arr_rate = arrival_rate
         self.arr_stream_rg = arrival_stream_rg
         self.stop_time = stop_time
         self.max_arrivals = max_arrivals
         self.entity_cls = entity_cls
+        self.cls_args = kwargs
 
         # State attributes
         self.num_entities_created = 0
@@ -751,17 +782,21 @@ class PoissonArrivals:
             # Delay until time for next arrival
             yield self.env.timeout(iat)
             self.num_entities_created += 1
-            patient_type = self.assign_patient_type()
-            new_patient_id = f'{patient_type}_{self.num_entities_created}'
-            # Create new patient
-            obpatient = Patient(
-                new_patient_id, patient_type, self.uid, self.env.now, self.config.los_distributions)
+
+            new_entity_id = f'{self.arrival_stream_uid}_{self.num_entities_created}'
+
+            new_entity = self.entity_cls(patient_id = new_entity_id, arrival_type=self.arrival_stream_uid,
+                                         arr_time=self.env.now, los_distributions=
+
+                 self.uid, self.env.now, self.config.los_distributions)
+
+            arr_time: float, los_distributions: Dict
 
             logging.debug(
                 f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
 
             # Initiate process of patient entering system
-            self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
+            self.env.process(self.obsystem.patient_care_units[ENTRY].put(obpatient, self.obsystem))
 
 
 
@@ -829,7 +864,7 @@ class OBPatientGeneratorPoisson:
                 f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
 
             # Initiate process of patient entering system
-            self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
+            self.env.process(self.obsystem.patient_care_units[ENTRY].put(obpatient, self.obsystem))
 
     def assign_patient_type(self):
         if self.uid == ArrivalType.SPONT_LABOR.value:
@@ -878,7 +913,7 @@ class OBPatientGeneratorWeeklyStaticSchedule:
     """
 
     def __init__(self, uid: Union[str, int], env: 'Environment',
-                 config: OBConfig, obsystem: OBsystem,
+                 config: Config, obsystem: PatientFlowSystem,
                  router: OBStaticRouter, schedule: NDArray,
                  arr_stream_rg: DTypeLike,
                  stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
@@ -930,7 +965,7 @@ class OBPatientGeneratorWeeklyStaticSchedule:
                         f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
 
                     # Initiate process of patient entering system
-                    self.env.process(self.obsystem.obunits[ENTRY].put(obpatient, self.obsystem))
+                    self.env.process(self.obsystem.patient_care_units[ENTRY].put(obpatient, self.obsystem))
 
             # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)
@@ -975,13 +1010,13 @@ def process_command_line(argv=None):
     return args
 
 
-def simulate(config: OBConfig, rep_num: int):
+def simulate(config: Config, rep_num: int):
     """
     Run one replication of simulation model.
 
     Parameters
     ----------
-    config : OBConfig
+    config : Config
     rep_num : int, simulation replication number
 
     Returns
@@ -1006,19 +1041,27 @@ def simulate(config: OBConfig, rep_num: int):
     sim_calendar = SimCalendar(env, config)
 
     # Create an OB System
-    obsystem = OBsystem(env, config.locations, config.los_distributions, sim_calendar)
+    obsystem = PatientFlowSystem(env, config, sim_calendar)
 
     # Create router
     router = OBStaticRouter(env, obsystem, config.routes, config.rg['los'])
 
     # Create patient generators for random arrivals
     patient_generators_poisson = {}
-    for poisson_id, arr_rate in config.rand_arrival_rates.items():
-        if arr_rate > 0.0 and config.rand_arrival_toggles[poisson_id] > 0:
-            patient_generators_poisson[poisson_id] = \
+    for arrival_stream_uid, arr_rate in config.rand_arrival_rates.items():
+        if arr_rate > 0.0 and config.rand_arrival_toggles[arrival_stream_uid] > 0:
+
+            patient_generator = PoissonArrivals(env, arrival_stream_uid, config.rg['arrivals'],
+                                                stop_time=run_time, max_arrivals=max_arrivals,
+                                                entity_cls=Patient, )
+
+            patient_generators_poisson.append(patient_generator)
+
+
+            patient_generators_poisson[arrival_stream_uid] = \
                 OBPatientGeneratorPoisson(
-                    poisson_id, env, config, obsystem, router,
-                    config.rand_arrival_rates[poisson_id], config.rg['arrivals'],
+                    arrival_stream_uid, env, config, obsystem, router,
+                    config.rand_arrival_rates[arrival_stream_uid], config.rg['arrivals'],
                     stop_time=run_time, max_arrivals=max_arrivals)
 
     # Create patient generators for scheduled c-sections and scheduled inductions
@@ -1040,8 +1083,8 @@ def simulate(config: OBConfig, rep_num: int):
     # Patient generator stats
     print(obio.output_header("Patient generator stats", 70, config.scenario, rep_num))
 
-    for poisson_id in patient_generators_poisson:
-        print(f"Num patients generated by {poisson_id}: {patient_generators_poisson[poisson_id].num_patients_created}")
+    for arrival_stream_uid in patient_generators_poisson:
+        print(f"Num patients generated by {arrival_stream_uid}: {patient_generators_poisson[arrival_stream_uid].num_patients_created}")
 
     for sched_id in patient_generators_scheduled:
         print(
@@ -1049,13 +1092,13 @@ def simulate(config: OBConfig, rep_num: int):
 
     # Unit stats
     print(obio.output_header("Unit entry/exit stats", 70, config.scenario, rep_num))
-    for unit_name, unit in obsystem.obunits.items():
+    for unit_name, unit in obsystem.patient_care_units.items():
         print(unit.basic_stats_msg())
 
     # System exit stats
     print(obio.output_header("Patient exit stats", 70, config.scenario, rep_num))
-    print("Num patients exiting system: {}".format(obsystem.obunits[EXIT].num_exits))
-    print("Last exit at: {:.2f}\n".format(obsystem.obunits[EXIT].last_exit_ts))
+    print("Num patients exiting system: {}".format(obsystem.patient_care_units[EXIT].num_exits))
+    print("Last exit at: {:.2f}\n".format(obsystem.patient_care_units[EXIT].last_exit_ts))
 
     # Compute occupancy stats
     occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, config.run_time,
@@ -1157,7 +1200,7 @@ def main(argv=None):
 
     # Load scenario configuration file and create OBConfig object
     config_dict = obio.load_config(args.config)
-    config = OBConfig(config_dict)
+    config = Config(config_dict)
 
     # Initialize scenario specific variables
     scenario = config.scenario
