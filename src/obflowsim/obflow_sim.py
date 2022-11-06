@@ -360,6 +360,15 @@ class Patient:
                 return PatientType.URGENT_IND_CSECT.value
             else:
                 return PatientType.URGENT_IND_REG.value
+        elif self.arrival_type == ArrivalType.SCHED_CSECT.value:
+            # Scheduled c-section
+            return PatientType.SCHED_CSECT.value
+        else:
+            # Determine if scheduled induction ends up with c-section
+            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_sched_ind_to_c']:
+                return PatientType.SCHED_IND_CSECT.value
+            else:
+                return PatientType.SCHED_IND_REG.value
 
     def exit_system(self, env, obsystem):
 
@@ -757,7 +766,7 @@ class PatientPoissonArrivals:
         self.patient_flow_system = patient_flow_system
 
         # State attributes
-        self.num_entities_created = 0
+        self.num_patients_created = 0
 
         # Trigger the run() method and register it as a SimPy process
         env.process(self.run())
@@ -769,14 +778,14 @@ class PatientPoissonArrivals:
 
         # Main entity creation loop that terminates when stoptime reached
         while self.env.now < self.stop_time and \
-                self.num_entities_created < self.max_arrivals:
+                self.num_patients_created < self.max_arrivals:
             # Compute next interarrival time
             iat = self.arr_stream_rg.exponential(1.0 / self.arr_rate)
             # Delay until time for next arrival
             yield self.env.timeout(iat)
-            self.num_entities_created += 1
+            self.num_patients_created += 1
 
-            new_entity_id = f'{self.arrival_stream_uid}_{self.num_entities_created}'
+            new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
 
             if self.patient_flow_system is not None:
                 new_patient = Patient(new_entity_id, self.arrival_stream_uid,
@@ -793,35 +802,26 @@ class OBPatientGeneratorWeeklyStaticSchedule:
         ----------
         env : simpy.Environment
             the simulation environment
-        obsystem : OBSystem
-            the OB system containing the obunits list
-        router : OBStaticRouter like
-            used to route new arrival to first location
-        schedule : ndarray of int of shape (7, 24)
-            Number of scheduled arrivals by day of week and hour of day
-        stop_time : float
-            Stops generation at the stoptime. (default Infinity)
-        max_arrivals : int
-            Stops generation after max_arrivals. (default Infinity)
+
 
     """
 
-    def __init__(self, uid: Union[str, int], env: 'Environment',
-                 config: Config, obsystem: PatientFlowSystem,
-                 router: StaticRouter, schedule: NDArray,
-                 arr_stream_rg: DTypeLike,
-                 stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
+    def __init__(self, env, arrival_stream_uid: ArrivalType,
+                 schedule: NDArray,
+                 arrival_stream_rg,
+                 stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity,
+                 patient_flow_system=None):
 
-        self.uid = uid
+        # Parameter attributes
         self.env = env
-        self.config = config
-        self.obsystem = obsystem
-        self.router = router
+        self.arrival_stream_uid = arrival_stream_uid
         self.schedule = schedule
-        self.arr_stream_rg = arr_stream_rg
+        self.arr_stream_rg = arrival_stream_rg
         self.stop_time = stop_time
         self.max_arrivals = max_arrivals
-        self.out = None
+        self.patient_flow_system = patient_flow_system
+
+        # State attributes
         self.num_patients_created = 0
 
         # Trigger the run() method and register it as a SimPy process
@@ -832,7 +832,10 @@ class OBPatientGeneratorWeeklyStaticSchedule:
         Generate patients.
         """
 
-        weekly_cycle_length = pd.to_timedelta(1, unit='w') / pd.to_timedelta(1, unit=self.config.base_time_unit)
+        base_time_unit = self.patient_flow_system.sim_calendar.base_time_unit
+        weekly_cycle_length = \
+            pd.to_timedelta(1, unit='w') / pd.to_timedelta(1, unit=base_time_unit)
+
         # Main generator loop that terminates when stoptime reached
         while self.env.now < self.stop_time and \
                 self.num_patients_created < self.max_arrivals:
@@ -845,21 +848,17 @@ class OBPatientGeneratorWeeklyStaticSchedule:
             for (day, hour, num_sched) in arrival_epochs:
                 # Compute number of time units from the start of current week until scheduled procedure time
                 time_of_week = \
-                    pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=self.config.base_time_unit)
+                    pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=base_time_unit)
                 for patient in range(num_sched):
                     self.num_patients_created += 1
-                    patient_type = self.assign_patient_type()
-                    new_patient_id = f'{patient_type}_{self.num_patients_created}'
-                    # Create new patient
-                    obpatient = Patient(
-                        new_patient_id, patient_type, self.uid, self.env.now, self.router,
-                        self.config.los_distributions, entry_delay=time_of_week)
+                    new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
 
-                    logging.debug(
-                        f"{self.env.now:.4f}: {obpatient.patient_id} created at {self.env.now:.4f} ({self.obsystem.sim_calendar.now()}).")
+                    if self.patient_flow_system is not None:
+                        new_patient = Patient(new_entity_id, self.arrival_stream_uid,
+                                              self.env.now, self.patient_flow_system)
 
-                    # Initiate process of patient entering system
-                    self.env.process(self.obsystem.patient_care_units[ENTRY].put(obpatient, self.obsystem))
+                        logging.debug(
+                            f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
 
             # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)
@@ -958,9 +957,9 @@ def simulate(config: Config, rep_num: int):
         if len(schedule) > 0 and config.sched_arrival_toggles[sched_id] > 0:
             patient_generators_scheduled[sched_id] = \
                 OBPatientGeneratorWeeklyStaticSchedule(
-                    sched_id, env, config, obsystem, router,
-                    config.schedules[sched_id], config.rg['arrivals'],
-                    stop_time=run_time, max_arrivals=max_arrivals)
+                    env, sched_id, config.schedules[sched_id],
+                    config.rg['arrivals'],
+                    stop_time=run_time, max_arrivals=max_arrivals, patient_flow_system=obsystem)
 
     # TODO - create patient generator for urgent inductions. For now, we'll ignore these patient types.
 
@@ -973,7 +972,7 @@ def simulate(config: Config, rep_num: int):
 
     for arrival_stream_uid in patient_generators_poisson:
         print(
-            f"Num patients generated by {arrival_stream_uid}: {patient_generators_poisson[arrival_stream_uid].num_entities_created}")
+            f"Num patients generated by {arrival_stream_uid}: {patient_generators_poisson[arrival_stream_uid].num_patients_created}")
 
     for sched_id in patient_generators_scheduled:
         print(
