@@ -1099,8 +1099,15 @@ def main(argv=None):
 
     # Check for undercapacitated system and compute basic load stats
     unit_load, unit_intensity = obq.unit_loads(config)
-    # pprint(unit_load)
-    # pprint(unit_intensity)
+    logging.debug(
+        f"{0.0:.4f}: unit_load\n{unit_load}).")
+    logging.debug(
+        f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
+
+    logging.warning(
+        f"{0.0:.4f}: unit_load\n{unit_load}).")
+    logging.warning(
+        f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
 
     results = []
     for i in range(1, config.num_replications + 1):

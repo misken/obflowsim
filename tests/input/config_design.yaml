@@ -1,7 +1,7 @@
 scenario: 1
 
 run_settings:
-  num_replications: 5
+  num_replications: 2
   run_time: 7200
   warmup_time: 1200
   

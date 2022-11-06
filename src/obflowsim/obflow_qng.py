@@ -33,7 +33,7 @@ def unit_loads(config: Config):
 
     traffic_intensity = {}
     for unit_name, unit in config.locations.items():
-        traffic_intensity[unit_name] = load[unit_name] / unit['capacity']
+        traffic_intensity[unit_name] = round(load[unit_name] / unit['capacity'], 3)
 
         if traffic_intensity[unit_name] >= 1.0:
             logger.warning(
@@ -47,7 +47,11 @@ def spont_labor_subrates(config: Config):
 
     # Start with spont_labor arrival stream
 
-    spont_labor_rate = config.rand_arrival_rates['spont_labor']
+    if config.rand_arrival_rates['spont_labor'] > 0.0 and config.rand_arrival_toggles['spont_labor'] > 0:
+        spont_labor_rate = config.rand_arrival_rates['spont_labor']
+    else:
+        spont_labor_rate = 0.0
+
     spont_labor_subrate = {}
 
     pct_spont_labor_aug = config.branching_probabilities['pct_spont_labor_aug']
@@ -82,13 +86,17 @@ def scheduled_subrates(config: Config):
     scheduled_subrate = {}
     pct_sched_ind_to_c = config.branching_probabilities['pct_sched_ind_to_c']
 
-    if 'sched_csect' in config.schedules:
+    if 'sched_csect' in config.schedules and config.sched_arrival_toggles['sched_csect'] > 0:
         tot_weekly_patients = np.sum(config.schedules['sched_csect'])
         scheduled_subrate[PatientType.SCHED_CSECT.value] = tot_weekly_patients / 168.0
+    else:
+        scheduled_subrate[PatientType.SCHED_CSECT.value] = 0.0
 
-    if 'sched_induced_labor' in config.schedules:
+    if 'sched_induced_labor' in config.schedules and config.sched_arrival_toggles['sched_induced_labor'] > 0:
         tot_scheduled_induction_rate = \
             np.sum(config.schedules['sched_induced_labor']) / 168.0
+    else:
+        tot_scheduled_induction_rate = 0.0
 
         scheduled_subrate[PatientType.SCHED_IND_REG.value] = \
             (1 - pct_sched_ind_to_c) * tot_scheduled_induction_rate
@@ -98,12 +106,19 @@ def scheduled_subrates(config: Config):
 
     return scheduled_subrate
 
+
 def non_delivery_subrates(config: Config):
 
     non_delivery_subrate = {}
 
-    non_delivery_subrate[PatientType.RAND_NONDELIV_LDR.value] = config.rand_arrival_rates['non_delivery_ldr']
-    non_delivery_subrate[PatientType.RAND_NONDELIV_PP.value] = config.rand_arrival_rates['non_delivery_pp']
+    if config.rand_arrival_toggles['non_delivery_ldr'] > 0:
+        non_delivery_subrate[PatientType.RAND_NONDELIV_LDR.value] = config.rand_arrival_rates['non_delivery_ldr']
+    else:
+        non_delivery_subrate[PatientType.RAND_NONDELIV_LDR.value] = 0.0
+
+    if config.rand_arrival_toggles['non_delivery_pp'] > 0:
+        non_delivery_subrate[PatientType.RAND_NONDELIV_PP.value] = config.rand_arrival_rates['non_delivery_pp']
+    non_delivery_subrate[PatientType.RAND_NONDELIV_PP.value] = 0.0
 
     return non_delivery_subrate
 
