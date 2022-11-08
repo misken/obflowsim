@@ -3,8 +3,8 @@ import logging
 import numpy as np
 import networkx as nx
 
-from obflow_sim import Config
-from obflow_sim import PatientType
+from obflowsim.config import Config
+from obflowsim.obconstants import PatientType
 
 logger = logging.getLogger(__name__)
 

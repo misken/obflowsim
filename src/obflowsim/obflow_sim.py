@@ -1,13 +1,12 @@
 import sys
 import logging
 from logging import Logger
-from enum import Enum
 from copy import deepcopy
 from pathlib import Path
 import argparse
 from pprint import pprint
 from abc import ABC, abstractmethod
-from enum import StrEnum
+
 
 from typing import (
     TYPE_CHECKING,
@@ -35,10 +34,8 @@ import json
 import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
 import obflowsim.obflow_qng as obq
-
-
-
-MAX_ARRIVALS = 1e+6
+from obflowsim.config import Config
+from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 
 # TODO - make sure all docstrings are complete
 # TODO - use type annotations (?)
@@ -59,104 +56,12 @@ Details:
 """
 
 
-class Config:
-    """
-    OBConfig is the class used to store simulation scenario instance configuration information.
-
-    Attributes
-    ----------
-    scenario : str
-        scenario identifier used in output filenames
-    run_time : float
-        length of simulation run in base time units
-    warmup_time : float
-        time after which steady state simulation output statistics begin to be computed
-    num_replications : int
-        the number of independent replications of the simulation model
-    rg : dict
-        key is 'arrivals' or 'los' and value is a `numpy.random.default_rng` object. The seed
-        value is based on `config_dict['random_number_streams']`, which has same key values
-    rand_arrival_rates : dict of floats
-        keys are valid arrival stream identifiers (see documentation for the config file). Units are the
-        mean number of arrivals per base time unit. These means are used with the `OBPatientGeneratorPoisson`
-        class for generating unscheduled (random) arrivals.
-    rand_arrival_toggles : dict of ints
-        same keys as `rand_arrival_rates` with a value of 0 shutting off the arrival stream and 1 enabling
-        the arrival stream.
-
-
-
-    Methods
-    -------
-    says(sound=None)
-        Prints the animals name and what sound it makes
-    """
-
-    def __init__(self, config_dict: Dict):
-        self.scenario = config_dict['scenario']
-
-        self.run_time = config_dict['run_settings']['run_time']
-        self.warmup_time = config_dict['run_settings']['warmup_time']
-        self.num_replications = config_dict['run_settings']['num_replications']
-
-        # Create random number generators
-        self.rg = {}
-        for stream, seed in config_dict['random_number_streams'].items():
-            self.rg[stream] = default_rng(seed)
-
-        # Arrival rates
-        self.rand_arrival_rates = config_dict['rand_arrival_rates']
-        self.rand_arrival_toggles = config_dict['rand_arrival_toggles']
-
-        # Schedules
-        self.schedules = {}
-        if 'sched_csect' in config_dict['schedule_files']:
-            sched_file = config_dict['schedule_files']['sched_csect']
-            self.schedules['sched_csect'] = np.loadtxt(sched_file, dtype=int)
-
-        if 'sched_induced_labor' in config_dict['schedule_files']:
-            sched_file = config_dict['schedule_files']['sched_induced_labor']
-            self.schedules['sched_induced_labor'] = np.loadtxt(sched_file, dtype=int)
-
-        self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
-
-        # Branching probabilities
-        self.branching_probabilities = config_dict['branching_probabilities']
-
-        # Length of stay
-        self.los_params = config_dict['los_params']
-        self.los_distributions, self.los_means = obio.create_los_partials(config_dict['los_distributions'],
-                                                                          self.los_params, self.rg['los'])
-
-        self.locations = config_dict['locations']
-        self.routes = config_dict['routes']
-        self.outputs = config_dict['outputs']
-
-        # Calendar related
-        self.use_calendar_time = config_dict['run_settings']['use_calendar_time']
-        if 'start_date' in config_dict['run_settings']:
-            self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
-        else:
-            # Default start_date is first Monday after Unix epoch
-            self.start_date = pd.Timestamp('1970-01-05')
-
-        self.base_time_unit = config_dict['run_settings']['base_time_unit']
-
-        # Output paths
-        outputs = self.outputs.keys()
-        self.paths = {output: None for output in outputs}
-        for output in outputs:
-            if self.outputs[output]['write']:
-                Path(self.outputs[output]['path']).mkdir(parents=True, exist_ok=True)
-                self.paths[output] = Path(self.outputs[output]['path'])
-
-
 class SimCalendar:
     """
 
     """
 
-    def __init__(self, env: 'Environment', config: Config):
+    def __init__(self, env: Environment, config: Config):
         self.env = env
         self.start_date = config.start_date
         self.base_time_unit = config.base_time_unit
@@ -174,83 +79,7 @@ class SimCalendar:
         return elapsed_timedelta / pd.to_timedelta(1, unit=self.base_time_unit)
 
 
-class PatientType(StrEnum):
-    """
-    # Patient Type and Patient Flow Definitions
 
-    # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
-    # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
-    # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
-    # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
-    # Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
-    # Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
-    # Type 7: sched arrival, C-section delivery, route = 1-3-2-4
-
-    # Type 8: urgent induced arrival, regular delivery, route = 1-2-4
-    # Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
-
-    # Type 10: random arrival, non-delivered LD, route = 1
-    # Type 11: random arrival, non-delivered PP route = 4
-
-    TODO - Python 3.11 has strEnum
-    """
-    RAND_SPONT_REG = 'RAND_SPONT_REG'
-    RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
-    RAND_AUG_REG = 'RAND_AUG_REG'
-    RAND_AUG_CSECT = 'RAND_AUG_CSECT'
-    SCHED_IND_REG = 'SCHED_IND_REG'
-    SCHED_IND_CSECT = 'SCHED_IND_CSECT'
-    SCHED_CSECT = 'SCHED_CSECT'
-    URGENT_IND_REG = 'URGENT_IND_REG'
-    URGENT_IND_CSECT = 'URGENT_IND_CSECT'
-    RAND_NONDELIV_LDR = 'RAND_NONDELIV_LDR'
-    RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
-
-
-class ArrivalType(StrEnum):
-    """
-
-    """
-    SPONT_LABOR = 'spont_labor'
-    URGENT_INDUCED_LABOR = 'urgent_induced_labor'
-    NON_DELIVERY_LDR = 'non_delivery_ldr'
-    NON_DELIVERY_PP = 'non_delivery_pp'
-    SCHED_CSECT = 'sched_csect'
-    SCHED_INDUCED_LABOR = 'sched_induced_labor'
-
-
-class PatientTypeArrivalType:
-    pat_type_to_arrival_type = {
-        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT.value,
-        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR.value,
-        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
-    }
-
-class UnitName(StrEnum):
-    """
-
-    """
-    ENTRY = 'ENTRY'
-    EXIT = 'EXIT'
-
-# class OBunitId(IntEnum):
-#     ENTRY = 0
-#     OBS = 1
-#     LDR = 2
-#     CSECT = 3
-#     PP = 4
-#     LDRP = 5
-#     LD = 6
-#     RECOVERY = 8
-#     EXIT = 8
 
 
 class PatientFlowSystem:
