@@ -7,6 +7,7 @@ from pathlib import Path
 import argparse
 from pprint import pprint
 from abc import ABC, abstractmethod
+from enum import StrEnum
 
 from typing import (
     TYPE_CHECKING,
@@ -35,8 +36,7 @@ import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
 import obflowsim.obflow_qng as obq
 
-ENTRY = 'ENTRY'
-EXIT = 'EXIT'
+
 
 MAX_ARRIVALS = 1e+6
 
@@ -174,7 +174,7 @@ class SimCalendar:
         return elapsed_timedelta / pd.to_timedelta(1, unit=self.base_time_unit)
 
 
-class PatientType(Enum):
+class PatientType(StrEnum):
     """
     # Patient Type and Patient Flow Definitions
 
@@ -207,7 +207,7 @@ class PatientType(Enum):
     RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
 
 
-class ArrivalType(Enum):
+class ArrivalType(StrEnum):
     """
 
     """
@@ -234,6 +234,12 @@ class PatientTypeArrivalType:
         PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
     }
 
+class UnitName(StrEnum):
+    """
+
+    """
+    ENTRY = 'ENTRY'
+    EXIT = 'EXIT'
 
 # class OBunitId(IntEnum):
 #     ENTRY = 0
@@ -277,6 +283,8 @@ class PatientFlowSystem:
 
 class Patient:
     """
+    These are the *entities* who flow through a *patient flow system* (``PatientFlowSystem``)
+    consisting of a network of *patient care units* (``PatientCareUnit``).
 
     """
 
@@ -286,9 +294,9 @@ class Patient:
 
         Parameters
         ----------
-        patient_id
-        patient_type
-        arrival_type
+        patient_id : str
+            Unique identifier for each patient instance
+        arrival_type : ArrivalType
         arr_time
         los_distributions
         entry_delay : float
@@ -334,7 +342,7 @@ class Patient:
 
         # Initiate process of patient entering system
         self.patient_flow_system.env.process(
-            self.patient_flow_system.patient_care_units[ENTRY].put(self, self.patient_flow_system))
+            self.patient_flow_system.patient_care_units[UnitName.ENTRY.value].put(self, self.patient_flow_system))
 
     def assign_patient_type(self):
         if self.arrival_type == ArrivalType.SPONT_LABOR.value:
@@ -509,11 +517,11 @@ class StaticRouter(Router):
 
         # Sample from los distributions for planned_los
         for unit, data in route_graph.nodes(data=True):
-            if unit == ENTRY:
+            if unit == UnitName.ENTRY.value:
                 # Entry delays are used to model scheduled procedures. Delay
                 # time is number of time units from start of current week
                 route_graph.nodes[unit]['planned_los'] = patient.entry_delay
-            elif unit == EXIT:
+            elif unit == UnitName.EXIT.value:
                 route_graph.nodes[unit]['planned_los'] = 0.0
             else:
                 route_graph.nodes[unit]['planned_los'] = self.los_distributions[patient.patient_type][unit]()
@@ -673,7 +681,7 @@ class PatientCareUnit:
         yield self.env.timeout(adj_los)
 
         # Go to next destination (which could be EXIT)
-        if patient.current_unit_id != EXIT:
+        if patient.current_unit_id != UnitName.EXIT.value:
             # Determine next stop in route and try to get a bed in that unit
             patient.next_unit_id = patient.patient_flow_system.router.get_next_stop(patient)
             self.env.process(obsystem.patient_care_units[patient.next_unit_id].put(patient, obsystem))
@@ -795,7 +803,7 @@ class PatientPoissonArrivals:
                     f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
 
 
-class OBPatientGeneratorWeeklyStaticSchedule:
+class PatientGeneratorWeeklyStaticSchedule:
     """ Generates patients according to a repeating one week schedule
 
         Parameters
@@ -836,11 +844,10 @@ class OBPatientGeneratorWeeklyStaticSchedule:
         weekly_cycle_length = \
             pd.to_timedelta(1, unit='w') / pd.to_timedelta(1, unit=base_time_unit)
 
-        # Main generator loop that terminates when stoptime reached
-        while self.env.now < self.stop_time and \
-                self.num_patients_created < self.max_arrivals:
+        # Main generator loop that terminates when stopping condition reached
+        while self.env.now < self.stop_time and self.num_patients_created < self.max_arrivals:
 
-            # Create tuples (day, hour, num scheduled)
+            # Create arrival epoch tuples (day, hour, num scheduled)
             arrival_epochs = [(d, h, self.schedule[d, h]) for d in range(6)
                               for h in range(23) if self.schedule[d, h] > 0]
 
@@ -849,10 +856,12 @@ class OBPatientGeneratorWeeklyStaticSchedule:
                 # Compute number of time units from the start of current week until scheduled procedure time
                 time_of_week = \
                     pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=base_time_unit)
+
                 for patient in range(num_sched):
                     self.num_patients_created += 1
                     new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
 
+                    # Generate new patient
                     if self.patient_flow_system is not None:
                         new_patient = Patient(new_entity_id, self.arrival_stream_uid,
                                               self.env.now, self.patient_flow_system)
@@ -862,18 +871,6 @@ class OBPatientGeneratorWeeklyStaticSchedule:
 
             # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)
-
-    def assign_patient_type(self):
-        # Determine if scheduled c-section or scheduled induction
-        if self.uid == ArrivalType.SCHED_CSECT.value:
-            # Scheduled c-section
-            return PatientType.SCHED_CSECT.value
-        else:
-            # Determine if scheduled induction ends up with c-section
-            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_sched_ind_to_c']:
-                return PatientType.SCHED_IND_CSECT.value
-            else:
-                return PatientType.SCHED_IND_REG.value
 
 
 def process_command_line(argv=None):
@@ -956,7 +953,7 @@ def simulate(config: Config, rep_num: int):
     for sched_id, schedule in config.schedules.items():
         if len(schedule) > 0 and config.sched_arrival_toggles[sched_id] > 0:
             patient_generators_scheduled[sched_id] = \
-                OBPatientGeneratorWeeklyStaticSchedule(
+                PatientGeneratorWeeklyStaticSchedule(
                     env, sched_id, config.schedules[sched_id],
                     config.rg['arrivals'],
                     stop_time=run_time, max_arrivals=max_arrivals, patient_flow_system=obsystem)
@@ -976,7 +973,7 @@ def simulate(config: Config, rep_num: int):
 
     for sched_id in patient_generators_scheduled:
         print(
-            f"Num patients generated by {sched_id}: {patient_generators_poisson[sched_id].num_patients_created}")
+            f"Num patients generated by {sched_id}: {patient_generators_scheduled[sched_id].num_patients_created}")
 
     # Unit stats
     print(obio.output_header("Unit entry/exit stats", 70, config.scenario, rep_num))
@@ -985,8 +982,8 @@ def simulate(config: Config, rep_num: int):
 
     # System exit stats
     print(obio.output_header("Patient exit stats", 70, config.scenario, rep_num))
-    print("Num patients exiting system: {}".format(obsystem.patient_care_units[EXIT].num_exits))
-    print("Last exit at: {:.2f}\n".format(obsystem.patient_care_units[EXIT].last_exit_ts))
+    print("Num patients exiting system: {}".format(obsystem.patient_care_units[UnitName.EXIT.value].num_exits))
+    print("Last exit at: {:.2f}\n".format(obsystem.patient_care_units[UnitName.EXIT.value].last_exit_ts))
 
     # Compute occupancy stats
     occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, config.run_time,

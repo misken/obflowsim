@@ -572,7 +572,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
             arrtimes_unit = stops_df.loc[stops_df.unit == unit, 'request_entry_ts']
             # Make sure arrival times are sorted to compute interarrival times
             arrtimes_unit.sort_values(inplace=True)
-            iatimes_unit = arrtimes_unit.diff(1)[1:]
+            iatimes_unit = arrtimes_unit.diff(1).iloc[1:]
 
             newrec[f'iatime_mean_{unit.lower()}'] = iatimes_unit.mean()
             newrec[f'iatime_sd_{unit.lower()}'] = iatimes_unit.std()
@@ -595,8 +595,10 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
             newrec[f'occ_min_{unit.lower()}'] = occ_stats_df.loc[unit]['min_occ']
             newrec[f'occ_max_{unit.lower()}'] = occ_stats_df.loc[unit]['max_occ']
 
-    newrec['prob_blockedby_ldr'] = \
-        blocked_uncond_stats[('LDR', 'delay_num_gt_0')] / blocked_uncond_stats[('LDR', 'delay_count')]
+    # Compute blocking related statistics
+    if ('LDR', 'delay_num_gt_0') in blocked_uncond_stats.index:
+        newrec['prob_blockedby_ldr'] = \
+            blocked_uncond_stats[('LDR', 'delay_num_gt_0')] / blocked_uncond_stats[('LDR', 'delay_count')]
 
     if ('LDR', 'delay_mean') in blocked_cond_stats.index:
         newrec['blockedby_ldr_mean'] = blocked_cond_stats[('LDR', 'delay_mean')]
@@ -618,7 +620,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
     newrec['timestamp'] = str(datetime.now())
 
     print(newrec)
-    return(newrec)
+    return newrec
 
     # results.append(newrec)
     #

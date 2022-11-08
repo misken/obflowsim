@@ -7,10 +7,14 @@ Overview
 Patients
 --------------
 
-Units
-------
+These are the *entities* who flow through a *patient flow system*
+consisting of a network of *patient care units*.
 
+Patient care units
+-------------------
 
+Patient flow system
+--------------------
 
 Simulation calendar
 --------------------
