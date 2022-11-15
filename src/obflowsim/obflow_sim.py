@@ -70,7 +70,6 @@ class PatientFlowSystem:
         self.config = config
         self.sim_calendar = sim_calendar
         self.router = None
-        # self.los_distributions = config['los_distributions']
 
         # Create units container and individual patient care units
         self.patient_care_units = {}
@@ -100,13 +99,15 @@ class Patient:
         patient_id : str
             Unique identifier for each patient instance
         arrival_type : ArrivalType
-        arr_time
-        los_distributions
+            Unique identifier for arrival streams
+        arr_time : float
+            Simulation time at which patient arrives to system
+        patient_flow_system : PatientFlowSystem
+            System being modeled and to which new patient arrives
         entry_delay : float
             Length of time to hold patient in ENTRY node before routing to first location
         """
         self.patient_id = patient_id
-        #
         self.arrival_type = arrival_type
         self.system_arrival_ts = arr_time
         self.entry_delay = entry_delay
@@ -124,7 +125,6 @@ class Patient:
         self.next_unit_id = None
 
         # Initialize route related attributes
-
         # Determine route
         self.route_graph = self.patient_flow_system.router.create_route(self)
         self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
