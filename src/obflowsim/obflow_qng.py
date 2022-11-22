@@ -8,17 +8,23 @@ from obflowsim.obconstants import PatientType
 
 logger = logging.getLogger(__name__)
 
-def unit_loads(config: Config):
 
-    # Determine arrival rate to each unit by patient type
+def arrival_rates(config: Config, by='p'):
 
-    # Start with spont_labor arrival stream
     spont_labor_rates = spont_labor_subrates(config)
     scheduled_rates = scheduled_subrates(config)
     non_delivery_rates = non_delivery_subrates(config)
 
-    # Combine arrival rate dicts
-    arrival_rates = spont_labor_rates | scheduled_rates | non_delivery_rates
+    rates = spont_labor_rates | scheduled_rates | non_delivery_rates
+
+    return rates
+
+
+def unit_loads(config: Config):
+
+    # Determine arrival rate to each unit by patient type
+
+    arrival_rates_pattype = arrival_rates(config, 'p')
     los_means = config.los_means
 
     # Compute overall load and traffic intensity at each unit
@@ -26,7 +32,7 @@ def unit_loads(config: Config):
     for unit in config.locations:
         load[unit] = 0
 
-    for pat_type, rate in arrival_rates.items():
+    for pat_type, rate in arrival_rates_pattype.items():
         for unit in config.locations:
             if unit in los_means[pat_type]:
                 load[unit] += rate * los_means[pat_type][unit]
