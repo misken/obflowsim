@@ -40,21 +40,6 @@ from obflowsim.clock_tools import SimCalendar
 
 # TODO - make sure all docstrings are complete
 
-"""
-Basic OB patient flow model
-
-Details:
-
-- Generates arrivals via Poisson process patient generators as well as weekly schedules
-- Defines an ``OBUnit`` class that contains a ``simpy.Resource`` object as a member.
-  Not subclassing Resource, just using a ``Resource`` as a member.
-- Routing is done via setting ``out`` member of an ``OBUnit`` instance to
- another ``OBUnit`` instance to which the ``OBPatient`` instance should be
- routed. The routing logic is in ``OBStaticRouter`` with routes defined
- in the config file.
-
-"""
-
 
 class PatientFlowSystem:
     """
@@ -181,6 +166,10 @@ class Patient:
             else:
                 return PatientType.SCHED_IND_REG.value
 
+    #def get_los_adjustment(self):
+
+
+
     def exit_system(self, env, obsystem):
 
         logging.debug(
@@ -266,6 +255,14 @@ class StaticRouter(Router):
             # Add edges - simple serial route in this case
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
+
+                # Add blocking adjustment attribute
+                if 'blocking_adjustment' in edge:
+                    nx.set_edge_attributes(route_graph,{
+                        (edge['from'], edge['to']): {'blocking_adjustment': edge['blocking_adjustment']}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {'blocking_adjustment': 'none'}})
 
             for node in route_graph.nodes():
                 nx.set_node_attributes(route_graph,
@@ -385,7 +382,7 @@ class PatientCareUnit:
         self.id = name
         self.capacity = capacity
 
-        # Use a simpy Resource as one of the class members
+        # Use a simpy Resource as one of the class instance members
         self.unit = simpy.Resource(env, capacity)
 
         # Statistical accumulators
@@ -409,31 +406,33 @@ class PatientCareUnit:
         obsystem : OBSystem object
 
         """
+        # Increment stop number for this patient
         patient.current_stop_num += 1
+        current_stop_num = patient.current_stop_num
         logging.debug(
-            f"{self.env.now:.4f}: {patient.patient_id} trying to get {self.name} for stop_num {patient.current_stop_num}")
+            f"{self.env.now:.4f}: {patient.patient_id} trying to get {self.name} for stop_num {current_stop_num}")
 
         # Timestamp of request time
         bed_request_ts = self.env.now
         # Request a bed
         bed_request = self.unit.request()
         # Store bed request and timestamp in patient's request lists
-        patient.bed_requests[patient.current_stop_num] = bed_request
-        patient.unit_stops[patient.current_stop_num] = self.name
-        patient.request_entry_ts[patient.current_stop_num] = self.env.now
+        patient.bed_requests[current_stop_num] = bed_request
+        patient.unit_stops[current_stop_num] = self.name
+        patient.request_entry_ts[current_stop_num] = self.env.now
 
         # If we are coming from upstream unit, we are trying to exit that unit now
-        if patient.bed_requests[patient.current_stop_num - 1] is not None:
-            patient.request_exit_ts[patient.current_stop_num - 1] = self.env.now
+        if patient.bed_requests[current_stop_num - 1] is not None:
+            patient.request_exit_ts[current_stop_num - 1] = self.env.now
 
         # Yield until we get a bed
         yield bed_request
 
         # Seized a bed.
         # Update patient flow attributes for this stop
-        patient.entry_ts[patient.current_stop_num] = self.env.now
-        patient.wait_to_enter[patient.current_stop_num] = \
-            self.env.now - patient.request_entry_ts[patient.current_stop_num]
+        patient.entry_ts[current_stop_num] = self.env.now
+        patient.wait_to_enter[current_stop_num] = \
+            self.env.now - patient.request_entry_ts[current_stop_num]
         patient.current_unit_id = self.name
 
         # Update unit attributes
@@ -446,17 +445,17 @@ class PatientCareUnit:
         # Check if we have a bed from a previous stay and release it if we do.
         # Update stats for previous unit.
         if patient.bed_requests[patient.current_stop_num - 1] is not None:
-            patient.exit_ts[patient.current_stop_num - 1] = self.env.now
-            patient.wait_to_exit[patient.current_stop_num - 1] = \
-                self.env.now - patient.request_exit_ts[patient.current_stop_num - 1]
-            patient.previous_unit_id = patient.unit_stops[patient.current_stop_num - 1]
+            patient.exit_ts[current_stop_num - 1] = self.env.now
+            patient.wait_to_exit[current_stop_num - 1] = \
+                self.env.now - patient.request_exit_ts[current_stop_num - 1]
+            patient.previous_unit_id = patient.unit_stops[current_stop_num - 1]
             previous_unit = obsystem.patient_care_units[patient.previous_unit_id]
-            previous_request = patient.bed_requests[patient.current_stop_num - 1]
+            previous_request = patient.bed_requests[current_stop_num - 1]
             # Release the previous bed
             previous_unit.unit.release(previous_request)
             # Accumulate total time this unit occupied and other unit attributes
             previous_unit.tot_occ_time += \
-                self.env.now - patient.entry_ts[patient.current_stop_num - 1]
+                self.env.now - patient.entry_ts[current_stop_num - 1]
             previous_unit.num_exits += 1
             previous_unit.last_exit_ts = self.env.now
             # Decrement occupancy in previous unit since bed now released
@@ -473,12 +472,13 @@ class PatientCareUnit:
 
         # Do any blocking related los adjustments.
         # TODO: This is hard coded logic. Need general scheme for blocking adjustments.
+        G = patient.route_graph
         if self.name == 'LDR':
-            adj_los = max(0, los - patient.wait_to_exit[patient.current_stop_num - 1])
+            adj_los = max(0, los - patient.wait_to_exit[current_stop_num - 1])
         else:
             adj_los = los
 
-        patient.adjusted_los[patient.current_stop_num] = adj_los
+        patient.adjusted_los[current_stop_num] = adj_los
 
         # Wait for LOS to elapse
         yield self.env.timeout(adj_los)
@@ -490,22 +490,22 @@ class PatientCareUnit:
             self.env.process(obsystem.patient_care_units[patient.next_unit_id].put(patient, obsystem))
         else:
             # Patient is ready to exit system
-            patient.previous_unit_id = patient.unit_stops[patient.current_stop_num]
+            patient.previous_unit_id = patient.unit_stops[current_stop_num]
             previous_unit = obsystem.patient_care_units[patient.previous_unit_id]
-            previous_request = patient.bed_requests[patient.current_stop_num]
+            previous_request = patient.bed_requests[current_stop_num]
             # Release the bed
             previous_unit.unit.release(previous_request)
             # Accumulate total time this unit occupied and other unit attributes
             previous_unit.tot_occ_time += \
-                self.env.now - patient.entry_ts[patient.current_stop_num]
+                self.env.now - patient.entry_ts[current_stop_num]
             previous_unit.num_exits += 1
             previous_unit.last_exit_ts = self.env.now
 
             # # Decrement occupancy in previous unit since bed now released
             previous_unit.dec_occ()
 
-            patient.request_exit_ts[patient.current_stop_num] = self.env.now
-            patient.exit_ts[patient.current_stop_num] = self.env.now
+            patient.request_exit_ts[current_stop_num] = self.env.now
+            patient.exit_ts[current_stop_num] = self.env.now
             patient.exit_system(self.env, obsystem)
 
     def inc_occ(self, increment=1):
@@ -520,7 +520,7 @@ class PatientCareUnit:
         new_ts_occ = (self.env.now, prev_occ - decrement)
         self.occupancy_list.append(new_ts_occ)
 
-    def basic_stats_msg(self):
+    def basic_flow_stats_msg(self):
         """ Compute entries, exits, avg los and create summary message.
 
         Returns
@@ -781,7 +781,7 @@ def simulate(config: Config, rep_num: int):
     # Unit stats
     print(obio.output_header("Unit entry/exit stats", 70, config.scenario, rep_num))
     for unit_name, unit in obsystem.patient_care_units.items():
-        print(unit.basic_stats_msg())
+        print(unit.basic_flow_stats_msg())
 
     # System exit stats
     print(obio.output_header("Patient exit stats", 70, config.scenario, rep_num))
@@ -897,7 +897,7 @@ def main(argv=None):
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
 
     # Check for undercapacitated system and compute basic load stats
-    unit_load, unit_intensity = obq.unit_loads(config)
+    unit_load, unit_intensity = obq.static_load_analysis(config)
     logging.debug(
         f"{0.0:.4f}: unit_load\n{unit_load}).")
     logging.debug(

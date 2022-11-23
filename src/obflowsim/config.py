@@ -35,13 +35,13 @@ class Config:
     rand_arrival_toggles : dict of ints
         same keys as `rand_arrival_rates` with a value of 0 shutting off the arrival stream and 1 enabling
         the arrival stream.
+    MORE
 
 
 
     Methods
     -------
-    says(sound=None)
-        Prints the animals name and what sound it makes
+
     """
 
     def __init__(self, config_dict: Dict):

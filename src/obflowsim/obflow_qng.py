@@ -9,7 +9,19 @@ from obflowsim.obconstants import PatientType
 logger = logging.getLogger(__name__)
 
 
-def arrival_rates(config: Config, by='p'):
+def arrival_rates(config: Config):
+    """
+    Compute arrival rates by patient type
+
+    Parameters
+    ----------
+    config : Config
+
+    Returns
+    -------
+    Dict of patient type specific arrival rates
+
+    """
 
     spont_labor_rates = spont_labor_subrates(config)
     scheduled_rates = scheduled_subrates(config)
@@ -20,34 +32,22 @@ def arrival_rates(config: Config, by='p'):
     return rates
 
 
-def unit_loads(config: Config):
 
-    # Determine arrival rate to each unit by patient type
 
-    arrival_rates_pattype = arrival_rates(config, 'p')
-    los_means = config.los_means
-
-    # Compute overall load and traffic intensity at each unit
-    load = {}
-    for unit in config.locations:
-        load[unit] = 0
-
-    for pat_type, rate in arrival_rates_pattype.items():
-        for unit in config.locations:
-            if unit in los_means[pat_type]:
-                load[unit] += rate * los_means[pat_type][unit]
-
-    traffic_intensity = {}
-    for unit_name, unit in config.locations.items():
-        traffic_intensity[unit_name] = round(load[unit_name] / unit['capacity'], 3)
-
-        if traffic_intensity[unit_name] >= 1.0:
-            logger.warning(
-                f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load[unit_name]:.1f}, cap={unit['capacity']})")
-
-    return load, traffic_intensity
 
 def spont_labor_subrates(config: Config):
+    """
+    Compute arrival rates by patient type for spontaneous labor arrival stream
+
+    Parameters
+    ----------
+    config : Config
+
+    Returns
+    -------
+    Dict of patient type specific arrival rates
+
+    """
 
     # Determine arrival rate to each unit by patient type
 
@@ -82,12 +82,20 @@ def spont_labor_subrates(config: Config):
 
     return spont_labor_subrate
 
-    # Determine mean LOS at each unit by patient type
-
-
-    # Compute overall load and traffic intensity at each unit
 
 def scheduled_subrates(config: Config):
+    """
+    Compute arrival rates by patient type for scheduled arrival stream
+
+    Parameters
+    ----------
+    config : Config
+
+    Returns
+    -------
+    Dict of patient type specific arrival rates
+
+    """
 
     scheduled_subrate = {}
     pct_sched_ind_to_c = config.branching_probabilities['pct_sched_ind_to_c']
@@ -114,6 +122,18 @@ def scheduled_subrates(config: Config):
 
 
 def non_delivery_subrates(config: Config):
+    """
+    Compute arrival rates by patient type for non-delivered arrival stream
+
+    Parameters
+    ----------
+    config : Config
+
+    Returns
+    -------
+    Dict of patient type specific arrival rates
+
+    """
 
     non_delivery_subrate = {}
 
@@ -127,5 +147,33 @@ def non_delivery_subrates(config: Config):
     non_delivery_subrate[PatientType.RAND_NONDELIV_PP.value] = 0.0
 
     return non_delivery_subrate
+
+
+def static_load_analysis(config: Config):
+
+    # Determine arrival rate to each unit by patient type
+
+    arrival_rates_pattype = arrival_rates(config)
+    los_means = config.los_means
+
+    # Compute overall load and traffic intensity at each unit
+    load = {}
+    for unit in config.locations:
+        load[unit] = 0
+
+    for pat_type, rate in arrival_rates_pattype.items():
+        for unit in config.locations:
+            if unit in los_means[pat_type]:
+                load[unit] += rate * los_means[pat_type][unit]
+
+    traffic_intensity = {}
+    for unit_name, unit in config.locations.items():
+        traffic_intensity[unit_name] = round(load[unit_name] / unit['capacity'], 3)
+
+        if traffic_intensity[unit_name] >= 1.0:
+            logger.warning(
+                f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load[unit_name]:.1f}, cap={unit['capacity']})")
+
+    return load, traffic_intensity
 
 
