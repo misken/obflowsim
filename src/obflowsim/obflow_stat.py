@@ -3,11 +3,25 @@ import argparse
 import re
 from datetime import datetime
 from pathlib import Path
+from collections import Counter
 
 import numpy as np
 import pandas as pd
 from statsmodels.stats.weightstats import DescrStatsW
 from scipy.stats import t
+
+from obflowsim.obconstants import ArrivalType, PatientType, UnitName
+
+
+class PatientTypeSummary():
+    """
+    Stores counts and accumulated length of stay by patient type
+    """
+
+    def __init__(self):
+
+        self.num_exits = Counter({i.name: 0 for i in PatientType})
+        self.tot_patient_hours = {i.name: 0.0 for i in PatientType}
 
 
 def compute_occ_stats(obsystem, end_time, warmup=0,
@@ -520,7 +534,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
     actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
 
     grp_all = stops_df.groupby(['unit'])
-    grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'])
+    grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
 
     blocked_uncond_stats = grp_all['entry_tryentry'].apply(get_stats, 'delay_')
     blocked_cond_stats = grp_blocked['entry_tryentry'].apply(get_stats, 'delay_')

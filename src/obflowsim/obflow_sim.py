@@ -67,6 +67,9 @@ class PatientFlowSystem:
         # Create list to hold timestamps dictionaries (one per patient)
         self.stops_timestamps_list = []
 
+        # Create PatientTypeSummary instance
+        self.patient_type_summary = obstat.PatientTypeSummary()
+
 
 class Patient:
     """
@@ -166,14 +169,12 @@ class Patient:
             else:
                 return PatientType.SCHED_IND_REG.value
 
-    #def get_los_adjustment(self):
-
-
-
     def exit_system(self, env, obsystem):
 
         logging.debug(
             f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
+
+        obsystem.patient_type_summary.num_exits.update({self.patient_type: 1})
 
         # Create dictionaries of timestamps for patient_stop log
         for stop in range(len(self.unit_stops)):
@@ -471,10 +472,13 @@ class PatientCareUnit:
         patient.planned_los[patient.current_stop_num] = los
 
         # Do any blocking related los adjustments.
-        # TODO: This is hard coded logic. Need general scheme for blocking adjustments.
-        G = patient.route_graph
-        if self.name == 'LDR':
-            adj_los = max(0, los - patient.wait_to_exit[current_stop_num - 1])
+        if patient.previous_unit_id is not None:
+            G = patient.route_graph
+            los_adjustment_type = G[patient.previous_unit_id][patient.current_unit_id]['blocking_adjustment']
+            if los_adjustment_type == 'delay':
+                adj_los = max(0, los - patient.wait_to_exit[current_stop_num - 1])
+            else:
+                adj_los = los
         else:
             adj_los = los
 
