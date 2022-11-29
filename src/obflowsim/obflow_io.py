@@ -202,6 +202,29 @@ def write_occ_stats(occ_stats_path, occ_stats_df):
 
     occ_stats_df.to_csv(occ_stats_path, index=False)
 
+def occ_stats_to_string(occ_stats_df, scenario, rep_num):
+    """
+    Export occupancy stats to csv
+
+    Parameters
+    ----------
+    occ_stats_df
+
+    Returns
+    -------
+    """
+
+    pd.set_option('display.width', 1000)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.float_format', '{:.2f}'.format)
+    print(output_header("Occupancy stats", 130, scenario, rep_num))
+    occ_stats_string = occ_stats_df.reset_index(drop=True).to_string(index=False)
+    pd.reset_option('display.width')
+    pd.reset_option('display.max_columns')
+    pd.reset_option('display.float_format')
+
+    return occ_stats_string
+
 
 def write_summary_stats(summary_stats_path, summary_stats_df):
     """

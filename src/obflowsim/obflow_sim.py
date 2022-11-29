@@ -799,12 +799,6 @@ def simulate(config: Config, rep_num: int):
     if config.paths['occ_stats'] is not None:
         obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
 
-    # Print occupancy summary
-    pd.set_option('max_colwidth', None)
-    print(obio.output_header("Occupancy stats", 80, config.scenario, rep_num))
-    print(occ_stats_df)
-    pd.reset_option('max_colwidth')
-
     # Compute summary stats for this scenario replication
     scenario_rep_summary_dict = obstat.process_stop_log(
         config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
@@ -825,6 +819,10 @@ def simulate(config: Config, rep_num: int):
                 lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
             stop_log_df['exit_ts'] = stop_log_df['exit_ts'].map(lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
         obio.write_log('stop_log', config.paths['stop_logs'], stop_log_df, config.scenario, rep_num)
+
+    # Print occupancy summary
+
+    print(obio.occ_stats_to_string(occ_stats_df, config.scenario, rep_num))
 
     return scenario_rep_summary_dict
 
