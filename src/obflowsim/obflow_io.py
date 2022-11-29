@@ -27,6 +27,8 @@ from typing import (
     Tuple,
 )
 
+import obflowsim.obflow_stat as obstat
+
 ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform']
 
 
@@ -98,49 +100,11 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 args, kwargs = convert_str_to_args_and_kwargs(raw_dist_str)
                 partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
-                los_means[key_pat_type][key_unit] = mean_from_dist_params(func_name, args)
+                los_means[key_pat_type][key_unit] = obstat.mean_from_dist_params(func_name, args)
             else:
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
     return los_dists_partials, los_means
-
-def mean_from_dist_params(dist_name: str, params: Tuple):
-    """
-    Compute mean from distribution name and parameters - numpy based
-
-    Parameters
-    ----------
-    dist_name
-    params
-
-    Returns
-    -------
-
-    """
-
-    if dist_name == 'gamma':
-        _shape = params[0]
-        _scale = params[1]
-        _mean = _shape * _scale
-    elif dist_name == 'triangular':
-        _left = params[0]
-        _mode = params[1]
-        _right = params[2]
-        _mean = (_left + _mode + _right) / 3
-    elif dist_name == 'normal':
-        _mean = params[0]
-    elif dist_name == 'exponential':
-        _mean = params[0]
-    elif dist_name == 'uniform':
-        _left = params[0]
-        _right = params[1]
-        _mean = (_left + _right) / 2
-    else:
-        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
-
-    return _mean
-
-
 
 
 

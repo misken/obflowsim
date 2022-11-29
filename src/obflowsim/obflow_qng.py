@@ -157,23 +157,29 @@ def static_load_analysis(config: Config):
     los_means = config.los_means
 
     # Compute overall load and traffic intensity at each unit
-    load = {}
+    load_unit = {}
+    load_unit_ptype = {}
     for unit in config.locations:
-        load[unit] = 0
+        load_unit[unit] = 0.0
+        for pat_type in arrival_rates_pattype:
+            ptype_key = f'{unit}_{pat_type}'
+            load_unit_ptype[ptype_key] = 0.0
 
     for pat_type, rate in arrival_rates_pattype.items():
         for unit in config.locations:
             if unit in los_means[pat_type]:
-                load[unit] += rate * los_means[pat_type][unit]
+                ptype_key = f'{unit}_{pat_type}'
+                load_unit[unit] += rate * los_means[pat_type][unit]
+                load_unit_ptype[ptype_key] = rate * los_means[pat_type][unit]
 
     traffic_intensity = {}
     for unit_name, unit in config.locations.items():
-        traffic_intensity[unit_name] = round(load[unit_name] / unit['capacity'], 3)
+        traffic_intensity[unit_name] = round(load_unit[unit_name] / unit['capacity'], 3)
 
         if traffic_intensity[unit_name] >= 1.0:
             logger.warning(
-                f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load[unit_name]:.1f}, cap={unit['capacity']})")
+                f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load_unit[unit_name]:.1f}, cap={unit['capacity']})")
 
-    return load, traffic_intensity
+    return load_unit, load_unit_ptype, traffic_intensity
 
 

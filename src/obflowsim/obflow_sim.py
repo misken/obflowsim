@@ -6,6 +6,7 @@ from pathlib import Path
 import argparse
 from pprint import pprint
 from abc import ABC, abstractmethod
+from pprint import pprint
 
 
 from typing import (
@@ -793,16 +794,16 @@ def simulate(config: Config, rep_num: int):
     print("Last exit at: {:.2f}\n".format(obsystem.patient_care_units[UnitName.EXIT.value].last_exit_ts))
 
     # Compute occupancy stats
-    occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, config.run_time,
-                                                        warmup=config.warmup_time,
-                                                        quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+    occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
 
     if config.paths['occ_stats'] is not None:
         obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
 
     # Print occupancy summary
+    pd.set_option('max_colwidth', None)
     print(obio.output_header("Occupancy stats", 80, config.scenario, rep_num))
     print(occ_stats_df)
+    pd.reset_option('max_colwidth')
 
     # Compute summary stats for this scenario replication
     scenario_rep_summary_dict = obstat.process_stop_log(
@@ -901,15 +902,12 @@ def main(argv=None):
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
 
     # Check for undercapacitated system and compute basic load stats
-    unit_load, unit_intensity = obq.static_load_analysis(config)
+    load_unit, load_unit_ptype, unit_intensity = obq.static_load_analysis(config)
     logging.debug(
-        f"{0.0:.4f}: unit_load\n{unit_load}).")
+        f"{0.0:.4f}: unit_load\n{load_unit}).")
     logging.debug(
-        f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
-
-    logging.warning(
-        f"{0.0:.4f}: unit_load\n{unit_load}).")
-    logging.warning(
+        f"{0.0:.4f}: unit_load\n{load_unit_ptype}).")
+    logging.debug(
         f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
 
     results = []
