@@ -1,0 +1,110 @@
+scenario: 1
+
+rand_arrival_rates:
+    spont_labor: 0.20
+    urgent_induced_labor: 0.00
+    non_delivery_ldr: 0.00
+    non_delivery_pp: 0.00
+
+branching_probs:
+    pct_c_sect: 0.25
+    pct_spont_labor_aug: 0.4
+    pct_spont_labor_to_c: 0.4
+    pct_aug_labor_to_c: 0.06
+    pct_sched_ind_to_c: 0.12
+    pct_urg_ind_to_c: 0.12
+
+los_params:
+    mean_los_csect: 1.0
+    mean_los_ldr: 12.0
+    mean_los_obs: 2.4
+    mean_los_pp_c: 72.0
+    mean_los_pp_noc: 48.0
+    num_erlang_stages_csect: 4
+    num_erlang_stages_ldr: 2
+    num_erlang_stages_obs: 1
+    num_erlang_stages_pp: 8
+  
+los_distributions:
+    RAND_SPONT_REG:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+    RAND_SPONT_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        LDR: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+
+
+# Do we need id's for the locations since this model has fixed set
+# of locations? Is the name attribute used?
+
+locations:
+  ENTRY:
+    capacity: 1000
+  OBS:
+    capacity: 100
+  LDR:
+    capacity: 16
+  CSECT:
+    capacity: 1000
+  PP:
+    capacity: 36
+  EXIT:
+    capacity: 1000
+
+    
+
+random_number_streams:
+  arrivals: 27
+  los: 31
+  
+  
+routes:
+  1:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_PP
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+    id: 1
+  2:
+    edges:
+    - from: ENTRY
+      id: ENTRY_OBS
+      to: OBS
+    - from: OBS
+      id: OBS_LDR
+      to: LDR
+    - from: LDR
+      id: LDR_CSECT
+      to: CSECT
+    - from: CSECT
+      id: CSECT_pp
+      to: PP
+    - from: PP
+      id: PP_EXIT
+      to: EXIT
+    id: 2
+    
+    
+run_settings:
+  num_replications: 1
+  run_time: 2400
+  warmup_time: 800
+  
+paths:
+  occ_logs: ./logs
+  occ_stats: ./stats
+  output: ./output
+  stop_logs: ./logs
+
