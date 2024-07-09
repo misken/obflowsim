@@ -1,6 +1,7 @@
-from enum import StrEnum
+#from enum import StrEnum
+from enum import Enum
 
-class PatientType(StrEnum):
+class PatientType(Enum):
     """
     # Patient Type and Patient Flow Definitions
 
@@ -33,7 +34,7 @@ class PatientType(StrEnum):
     RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
 
 
-class ArrivalType(StrEnum):
+class ArrivalType(Enum):
     """
 
     """
@@ -60,7 +61,7 @@ class PatientTypeArrivalType:
         PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
     }
 
-class UnitName(StrEnum):
+class UnitName(Enum):
     """
 
     """

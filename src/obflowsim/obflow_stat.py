@@ -3,21 +3,88 @@ import argparse
 import re
 from datetime import datetime
 from pathlib import Path
+from collections import Counter
 
 import numpy as np
 import pandas as pd
 from statsmodels.stats.weightstats import DescrStatsW
 from scipy.stats import t
 
+from obflowsim.obconstants import ArrivalType, PatientType, UnitName
+import obflow_qng as obq
 
-def compute_occ_stats(obsystem, end_time, warmup=0,
-                      quantiles=(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)):
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Optional,
+    Tuple,
+)
+
+from obflowsim.obflow_sim import PatientFlowSystem
+
+
+class PatientTypeSummary():
+    """
+    Stores counts and accumulated length of stay by patient type
+    """
+
+    def __init__(self):
+
+        self.num_exits = Counter({i.name: 0 for i in PatientType})
+        self.tot_patient_hours = {i.name: 0.0 for i in PatientType}
+
+
+def mean_from_dist_params(dist_name: str, params: Tuple):
+    """
+    Compute mean from distribution name and parameters - numpy based
+
+    Parameters
+    ----------
+    dist_name
+    params
+
+    Returns
+    -------
+
+    """
+
+    if dist_name == 'gamma':
+        _shape = params[0]
+        _scale = params[1]
+        _mean = _shape * _scale
+    elif dist_name == 'triangular':
+        _left = params[0]
+        _mode = params[1]
+        _right = params[2]
+        _mean = (_left + _mode + _right) / 3
+    elif dist_name == 'normal':
+        _mean = params[0]
+    elif dist_name == 'exponential':
+        _mean = params[0]
+    elif dist_name == 'uniform':
+        _left = params[0]
+        _right = params[1]
+        _mean = (_left + _right) / 2
+    else:
+        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
+
+    return _mean
+
+
+def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)):
     """
     Compute occupancy statistics by unit
 
     Parameters
     ----------
-    obsystem : OBsystem
+    obsystem : PatientFlowSystem
     end_time : float, simulation end time
     egress : bool, if True compute statistics for ENTER and EXIT (default is False)
     log_path : str or Path, location of log files
@@ -30,6 +97,11 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
     """
     occ_stats_dfs = []
     occ_dfs = []
+    end_time = obsystem.config.run_time
+    warmup_time = obsystem.config.warmup_time
+
+    # Compute static loads
+    load_unit, load_unit_ptype, unit_rho = obq.static_load_analysis(obsystem.config)
 
     for unit_name, unit in obsystem.patient_care_units.items():
         # Only compute if at least onc change in occupancy during simulation
@@ -48,14 +120,17 @@ def compute_occ_stats(obsystem, end_time, warmup=0,
             occ_dfs.append(df)
 
             # Filter out recs before warmup
-            df = df[df['timestamp'] > warmup]
+            df = df[df['timestamp'] > warmup_time]
 
             # Compute time average occupancy statistics
             weighted_stats = DescrStatsW(df['occ'], weights=df['occ_weight'], ddof=0)
 
             occ_quantiles = weighted_stats.quantile(quantiles)
             occ_unit_stats_df = pd.DataFrame([{'unit': unit.name, 'capacity': unit.capacity,
-                                               'mean_occ': weighted_stats.mean, 'sd_occ': weighted_stats.std,
+                                               'mean_occ': weighted_stats.mean,
+                                               'static_load': load_unit[unit.name],
+                                               'static_rho': unit_rho[unit.name],
+                                               'sd_occ': weighted_stats.std,
                                                'min_occ': df['occ'].min(), 'max_occ': df['occ'].max()}])
 
             # Create wide dataframe of quantiles by unit
@@ -520,7 +595,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
     actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
 
     grp_all = stops_df.groupby(['unit'])
-    grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'])
+    grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
 
     blocked_uncond_stats = grp_all['entry_tryentry'].apply(get_stats, 'delay_')
     blocked_cond_stats = grp_blocked['entry_tryentry'].apply(get_stats, 'delay_')
