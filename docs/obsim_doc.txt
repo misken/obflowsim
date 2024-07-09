@@ -1,0 +1,62 @@
+Intro to Inpatient OB Simulation Model
+======================================
+
+Units modelled
+--------------
+
+Patient types and flows
+-----------------------
+
+
+Simio model design
+==================
+
+Arrival streams
+---------------
+
+There are six arrival streams – four of which are random arrivals and two are scheduled. Let’s build the random arrival streams first. 
+
+Random arrival streams
+^^^^^^^^^^^^^^^^^^^^^^
+
+The four random arrival streams and their associated Source nodes are:
+
+* spontaneous labor (`Spont_Labor`)
+* urgent induction (`Urg_Ind`)
+* non-delivered to LD (`NonDeliv_LD`)
+* non-delivered to PP (`NonDeliv_PP`)
+
+Ea
+We want to be able to run the model with either stationary or non-stationary arrivals. 
+
+Stationary arrivals
+~~~~~~~~~~~~~~~~~~~
+
+Set the Arrival Mode property of the `Spont_Labor` Source node to Interarrival Time and you'll see that the Interarrrival Time property is set to Random.Exponential(168.0/SpontLabor_AvgPerWeek)
+
+
+
+
+Each random arrival stream gets its own Source object.
+
+
+
+
+
+ and a Model Property defining the average volume per week. 
+In addition, the branching probabilities are implemented as Model Properties.
+
+
+Different entity types with different processing times and graphics
+-------------------------------------------------------------------
+Since multiple patient types 
+will visit the same Server objects (e.g. post-partum unit) and will have different LOS distributions, we need to 
+have a general approach to managing different parameters for different patient types. In Simio, the easiest way to 
+do this is through a Data Table (Chapter 7). Tables can contain any number of columns and the allowable data types includes a 
+wide variety of Standard Properties, Element References or Object References. Once the table is created, it can be 
+referenced in a variety of ways (p219) in the model. Row selection from tables can be done randomly based 
+on user specified probabilities or some rule. Often each entity will simply be referencing a specific row every time. 
+Simio provides an easy way to implement this by setting a Table Reference Assignment in the Source object.
+
+
+

@@ -1,37 +1,4 @@
-scenario: inf_cap
-
-run_settings:
-  num_replications: 1
-  run_time: 7200
-  warmup_time: 1200
-  
-  # Uncomment the following to use max_arrivals as additional stopping condition
-  # max_arrivals = 10000
-  
-  # h = hours, d = days
-  base_time_unit: h
-  
-  # use_calendar_time = 1 for yes, 0 for no
-  use_calendar_time: 0
-  
-  # Comment out start_date line to use default of 1970-01-05
-  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
-  start_date: 2022-02-01
-  
- 
-outputs:
-  occ_logs:
-    path: ./tests/output/logs
-    write: 1
-  occ_stats:
-    path: ./tests/output/stats
-    write: 1
-  stop_logs:
-    path: ./tests/output/logs
-    write: 1
-  summary_stats:
-    path: ./tests/output/stats
-    write: 1
+scenario: 1
 
 # A rate of 0.0 will shut off the arrival stream
 rand_arrival_rates:
@@ -43,19 +10,19 @@ rand_arrival_rates:
 # 1=on, 0=off    
 rand_arrival_toggles:
     spont_labor: 1
-    urgent_induced_labor: 0
+    urgent_induced_labor: 1
     non_delivery_ldr: 1
     non_delivery_pp: 1
 
 # A filename of '' (empty string) will shut off arrival stream    
 schedule_files:
-    sched_csect: ./tests/input/sched_c.txt
-    sched_induced_labor: ./tests/input/sched_induction.txt
+    sched_csect: ./input/sched_c.txt
+    sched_induced_labor: ./input/sched_induction.txt
 
 # 1=on, 0=off    
 sched_arrival_toggles:
-    sched_csect: 1
-    sched_induced_labor: 1
+    sched_csect: 0
+    sched_induced_labor: 0
 
 branching_probabilities:
     pct_spont_labor_aug: 0.4
@@ -81,7 +48,7 @@ los_params:
     num_erlang_stages_pp_nondelivery: 4
 
 # You can use a restricted set of numpy distributions parameterized via
-# constants that are user defined parameters in the los_params section.  
+# constants are user defined parameters in the los_params section.  
 los_distributions:
     RAND_SPONT_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
@@ -116,6 +83,8 @@ los_distributions:
     RAND_NONDELIV_PP:
         PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
+
+
 # Do we need id's for the locations since this model has fixed set
 # of locations? Is the name attribute used?
 
@@ -125,11 +94,11 @@ locations:
   OBS:
     capacity: 1000
   LDR:
-    capacity: 1000
+    capacity: 8
   CSECT:
     capacity: 1000
   PP:
-    capacity: 1000
+    capacity: 30
   EXIT:
     capacity: 1000
 
@@ -149,7 +118,6 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
-      blocking_adjustment: delay
     - from: LDR
       id: LDR_PP
       to: PP
@@ -164,7 +132,6 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
-      blocking_adjustment: delay
     - from: LDR
       id: LDR_CSECT
       to: CSECT
@@ -182,7 +149,6 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
-      blocking_adjustment: delay
     - from: LDR
       id: LDR_PP
       to: PP
@@ -197,7 +163,6 @@ routes:
     - from: OBS
       id: OBS_LDR
       to: LDR
-      blocking_adjustment: delay
     - from: LDR
       id: LDR_CSECT
       to: CSECT
@@ -262,5 +227,35 @@ routes:
 
     
     
-
+run_settings:
+  num_replications: 5
+  run_time: 7200
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional stopping condition
+  # max_arrivals = 10000
+  
+  # h = hours, d = days
+  base_time_unit: h
+  
+  # Comment out start_date line to use default of 1970-01-05
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2022-02-01
+  
+ 
+outputs:
+  occ_logs:
+    path: ./output/logs
+    write: 1
+  occ_stats:
+    path: ./output/stats
+    write: 1
+  stop_logs:
+    path: ./output/logs
+    write: 1
+  summary_stats:
+    path: ./output/stats
+    write: 1
 
