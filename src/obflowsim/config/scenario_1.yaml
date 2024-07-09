@@ -1,0 +1,99 @@
+rand_arrival_rates:
+    spont_labor: 0.20
+    urgent_induced_labor: 0.02
+    non_delivery_ldr: 0.05
+    non_delivery_pp: 0.05
+
+branching_probs:
+    pct_c_sect: 0.25
+    pct_spont_labor_aug: 0.4
+    pct_spont_labor_to_c: 0.4
+    pct_aug_labor_to_c: 0.06
+    pct_sched_ind_to_c: 0.12
+    pct_urg_ind_to_c: 0.12
+
+los_params:
+  mean_los_csect: 1.0
+  mean_los_ldr: 12.0
+  mean_los_obs: 2.4
+  mean_los_pp_c: 72.0
+  mean_los_pp_noc: 48.0
+  num_erlang_stages_csect: 4
+  num_erlang_stages_ldr: 2
+  num_erlang_stages_obs: 1
+  num_erlang_stages_pp: 8
+
+
+
+locations:
+  0:
+    capacity: 1000
+    id: 0
+    name: ENTRY
+  1:
+    capacity: 100
+    id: 1
+    name: OBS
+  2:
+    capacity: 16
+    id: 2
+    name: LDR
+  3:
+    capacity: 1000
+    id: 3
+    name: CSECT
+  4:
+    capacity: 36
+    id: 4
+    name: PP
+  5:
+    capacity: 1000
+    id: 5
+    name: EXIT
+paths:
+  occ_logs: ./logs/exp11b
+  occ_stats: ./stats/exp11b
+  output: ./output/exp11b
+  stop_logs: ./logs/exp11b
+random_number_streams:
+  arrivals: 27
+  los: 31
+routes:
+  1:
+    edges:
+    - from: 0
+      id: 0
+      to: 1
+    - from: 1
+      id: 1
+      to: 2
+    - from: 2
+      id: 2
+      to: 4
+    - from: 4
+      id: 3
+      to: 5
+    id: 1
+  2:
+    edges:
+    - from: 0
+      id: 0
+      to: 1
+    - from: 1
+      id: 1
+      to: 2
+    - from: 2
+      id: 2
+      to: 3
+    - from: 3
+      id: 3
+      to: 4
+    - from: 4
+      id: 4
+      to: 5
+    id: 2
+run_settings:
+  num_replications: 30
+  run_time: 36000
+  warmup_time: 4800
+scenario: 1
