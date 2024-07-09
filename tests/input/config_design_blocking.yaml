@@ -1,7 +1,7 @@
-scenario: inf_cap
+scenario: test_blocking
 
 run_settings:
-  num_replications: 1
+  num_replications: 5
   run_time: 7200
   warmup_time: 1200
   
@@ -11,11 +11,10 @@ run_settings:
   # h = hours, d = days
   base_time_unit: h
   
-  # use_calendar_time = 1 for yes, 0 for no
-  use_calendar_time: 0
-  
   # Comment out start_date line to use default of 1970-01-05
   # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
   start_date: 2022-02-01
   
  
@@ -43,7 +42,7 @@ rand_arrival_rates:
 # 1=on, 0=off    
 rand_arrival_toggles:
     spont_labor: 1
-    urgent_induced_labor: 0
+    urgent_induced_labor: 1
     non_delivery_ldr: 1
     non_delivery_pp: 1
 
@@ -125,11 +124,11 @@ locations:
   OBS:
     capacity: 1000
   LDR:
-    capacity: 1000
+    capacity: 8
   CSECT:
     capacity: 1000
   PP:
-    capacity: 1000
+    capacity: 30
   EXIT:
     capacity: 1000
 
