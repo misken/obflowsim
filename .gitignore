@@ -11,8 +11,6 @@ src/obflowsim.egg-info/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-tests/input/*.bak
-
 
 
 
