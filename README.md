@@ -23,7 +23,7 @@ include:
 
 * multiple patient arrival streams including spontaneous labor, scheduled c-sections and scheduled inductions,
 * multiple patient types based on arrival stream, whether or not labor is augmented, and whether or not a c-section is performed,
-* ability model standard unit configurations such as LDR+PP and LDRP,
+* ability to model standard unit configurations such as LDR+PP and LDRP,
 * detailed statistics regarding patient flow and unit occupancy (including time of day and day of week dependencies),
 * ability to model impacts of patients blocked due to insufficient downstream capacity,
 * YAML configuration files for defining simulation scenarios and experimental settings (e.g. run length, warmup time, number of replications).
