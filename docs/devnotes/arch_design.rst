@@ -35,15 +35,15 @@ Patient types
 Patient Type and Patient Flow Definitions
 
 * Type 1: random arrival spont labor, regular delivery, route = 1-2-4
-* Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
+* Type 2: random arrival spont labor, C-section delivery, route = 1-2-3-4
 * Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
-* Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
+* Type 4: random arrival augmented labor, C-section delivery, route = 1-2-3-4
 * Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
-* Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
-* Type 7: sched arrival, C-section delivery, route = 1-3-2-4
+* Type 6: sched arrival induced labor, C-section delivery, route = 1-2-3-4
+* Type 7: sched arrival, C-section delivery, route = 1-3-4
 
 * Type 8: urgent induced arrival, regular delivery, route = 1-2-4
-* Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
+* Type 9: urgent induced arrival, C-section delivery, route = 1-3-4
 
 * Type 10: random arrival, non-delivered LD, route = 1
 * Type 11: random arrival, non-delivered PP route = 4
@@ -207,6 +207,10 @@ TJW - LOS in LDR should be adjusted by time blocked in triage. However, once bab
 Occupancy tracking
 -------------------
 
+.. admonition:: And, by the way...
+
+   You can make up your own admonition too.
+
 Should we track occ history or just post-process a stop log with hillmaker?
 
 
@@ -255,6 +259,7 @@ No staffing within model. Post-process occupancy log or stop log.
 
 This post by jprayson describes a grocery store staffing approach:
 https://groups.google.com/g/python-simpy/c/m6ogUwIWtMU
+Hmm, this might be the maintainer of SimPy and desmod and he has the grocery store model in the desmod examples section of docs.
 
 Architecture and detailed design of obflowsim
 ==============================================
