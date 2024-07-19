@@ -589,12 +589,12 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
     plos_mean = stops_df_grp_unit['planned_los'].mean()
     plos_sd = stops_df_grp_unit['planned_los'].std()
     plos_skew = stops_df_grp_unit['planned_los'].skew()
-    plos_kurt = stops_df_grp_unit['planned_los'].apply(pd.DataFrame.kurt)
+    # plos_kurt = stops_df_grp_unit['planned_los'].apply(pd.DataFrame.kurt)
 
     actlos_mean = stops_df_grp_unit['exit_enter'].mean()
     actlos_sd = stops_df_grp_unit['exit_enter'].std()
     actlos_skew = stops_df_grp_unit['exit_enter'].skew()
-    actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
+    # actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
 
     grp_all = stops_df.groupby(['unit'])
     grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
@@ -640,8 +640,8 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
 
             newrec[f'planned_los_skew_{unit.lower()}'] = plos_skew[unit]
             newrec[f'actual_los_skew_{unit.lower()}'] = actlos_skew[unit]
-            newrec[f'planned_los_kurt_{unit.lower()}'] = plos_kurt[unit]
-            newrec[f'actual_los_kurt_{unit.lower()}'] = actlos_kurt[unit]
+            # newrec[f'planned_los_kurt_{unit.lower()}'] = plos_kurt[unit]
+            # newrec[f'actual_los_kurt_{unit.lower()}'] = actlos_kurt[unit]
 
     # Interarrival time stats for each unit
     for unit in units:
@@ -654,7 +654,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
             newrec[f'iatime_mean_{unit.lower()}'] = iatimes_unit.mean()
             newrec[f'iatime_sd_{unit.lower()}'] = iatimes_unit.std()
             newrec[f'iatime_skew_{unit.lower()}'] = iatimes_unit.skew()
-            newrec[f'iatime_kurt_{unit.lower()}'] = iatimes_unit.kurtosis()
+            # newrec[f'iatime_kurt_{unit.lower()}'] = iatimes_unit.kurtosis()
 
     # Get occ from occ stats summaries
     occ_stats_fn = Path(occ_stats_path) / f"occ_stats_scenario_{scenario}_rep_{rep_num}.csv"
