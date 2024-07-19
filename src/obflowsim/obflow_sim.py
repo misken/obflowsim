@@ -97,7 +97,7 @@ class Patient:
         """
         self.patient_id = patient_id
         self.arrival_type = arrival_type
-        self.system_arrival_ts = arr_time
+        self.system_arrival_ts = arr_time + entry_delay
         self.entry_delay = entry_delay
         self.patient_flow_system = patient_flow_system
         self.config = patient_flow_system.config
@@ -133,7 +133,7 @@ class Patient:
 
         # Initiate process of patient entering system
         self.patient_flow_system.env.process(
-            self.patient_flow_system.patient_care_units[UnitName.ENTRY.value].put(self, self.patient_flow_system))
+            self.patient_flow_system.patient_care_units[UnitName.ENTRY].put(self, self.patient_flow_system))
 
     def assign_patient_type(self):
         if self.arrival_type == ArrivalType.SPONT_LABOR.value:
@@ -407,6 +407,11 @@ class PatientCareUnit:
         obsystem : OBSystem object
 
         """
+
+        # Wait for any entry_delay needed
+        if self.name == UnitName.ENTRY:
+            yield self.env.timeout(patient.entry_delay)
+
         # Increment stop number for this patient
         patient.current_stop_num += 1
         current_stop_num = patient.current_stop_num
@@ -671,7 +676,7 @@ class PatientGeneratorWeeklyStaticSchedule:
                     # Generate new patient
                     if self.patient_flow_system is not None:
                         new_patient = Patient(new_entity_id, self.arrival_stream_uid,
-                                              self.env.now, self.patient_flow_system)
+                                              self.env.now, self.patient_flow_system, entry_delay=time_of_week)
 
                         logging.debug(
                             f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
@@ -852,30 +857,6 @@ def main(argv=None):
 
     # Create root logger
     logger = logger_setup(args.loglevel)
-    # logger = logging.getLogger()
-    # logger.setLevel(args.loglevel)
-    #
-    # # Create the Handler for logging data to console.
-    # logger_handler = logging.StreamHandler()
-    # logger_handler.setLevel(args.loglevel)
-    #
-    # # Create a Formatter for formatting the log messages
-    # logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    #
-    # # Add the Formatter to the Handler
-    # logger_handler.setFormatter(logger_formatter)
-    #
-    # # Add the Handler to the Logger
-    # logger.addHandler(logger_handler)
-
-    # Quick setup of root logger
-    # logging.basicConfig(
-    #     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    #     stream=sys.stdout,
-    # )
-    # # Retrieve root logger (no logger name passed to ``getLogger()``) and update its level
-    # logger = logging.getLogger()
-    # logger.setLevel(args.loglevel)
 
     # Load scenario configuration file and create OBConfig object
     config_dict = obio.load_config(args.config)
