@@ -4,10 +4,7 @@ from logging import Logger
 from copy import deepcopy
 from pathlib import Path
 import argparse
-from pprint import pprint
 from abc import ABC, abstractmethod
-from pprint import pprint
-
 
 from typing import (
     TYPE_CHECKING,
@@ -24,13 +21,13 @@ from numpy.typing import (
 from simpy.core import Environment
 
 import pandas as pd
-import numpy as np
+# import numpy as np
 import simpy
-from numpy.random import default_rng
-from numpy.random import Generator
+# from numpy.random import default_rng
+# from numpy.random import Generator
 import networkx as nx
 from networkx import DiGraph
-import json
+# import json
 
 import obflowsim.obflow_io as obio
 import obflowsim.obflow_stat as obstat
@@ -55,20 +52,22 @@ class PatientFlowSystem:
         self.env = env
         self.config = config
         self.sim_calendar = sim_calendar
-        self.router = None
+        self.router = None  # TODO: What's up with this?
 
         # Create units container and individual patient care units
         self.patient_care_units = {}
         for location, data in config.locations.items():
             self.patient_care_units[location] = PatientCareUnit(env, name=location, capacity=data['capacity'])
 
-        # Create list to hold timestamps dictionaries (one per patient stop)
+        # Create list to hold timestamps dictionaries (one per patient)
+        # TODO: Do we really need this? Redundant from stops list.
         self.patient_timestamps_list = []
 
-        # Create list to hold timestamps dictionaries (one per patient)
+        # Create list to hold timestamps dictionaries (one per patient stop)
         self.stops_timestamps_list = []
 
         # Create PatientTypeSummary instance
+        # TODO: Why no args passed to PatientTypeSummary()? Function isn't finished yet.
         self.patient_type_summary = obstat.PatientTypeSummary()
 
 
@@ -723,17 +722,6 @@ def simulate(config: Config, rep_num: int):
 
     """
 
-    # Determine stopping conditions specified in config file
-    if hasattr(config, 'max_arrivals'):
-        max_arrivals = config.max_arrivals
-    else:
-        max_arrivals = simpy.core.Infinity
-
-    if hasattr(config, 'run_time'):
-        run_time = config.run_time
-    else:
-        run_time = simpy.core.Infinity
-
     # Initialize a simulation environment and calendar
     env = simpy.Environment()
     sim_calendar = SimCalendar(env, config)
@@ -751,7 +739,7 @@ def simulate(config: Config, rep_num: int):
         # Check if this arrival stream is enabled
         if arr_rate > 0.0 and config.rand_arrival_toggles[arrival_stream_uid] > 0:
             patient_generator = PatientPoissonArrivals(env, arrival_stream_uid, arr_rate, config.rg['arrivals'],
-                                                       stop_time=run_time, max_arrivals=max_arrivals,
+                                                       stop_time=config.run_time, max_arrivals=config.max_arrivals,
                                                        patient_flow_system=obsystem)
 
             patient_generators_poisson[arrival_stream_uid] = patient_generator
@@ -764,7 +752,7 @@ def simulate(config: Config, rep_num: int):
                 PatientGeneratorWeeklyStaticSchedule(
                     env, sched_id, config.schedules[sched_id],
                     config.rg['arrivals'],
-                    stop_time=run_time, max_arrivals=max_arrivals, patient_flow_system=obsystem)
+                    stop_time=config.run_time, max_arrivals=config.max_arrivals, patient_flow_system=obsystem)
 
     # TODO - create patient generator for urgent inductions. For now, we'll ignore these patient types.
 
@@ -821,7 +809,6 @@ def simulate(config: Config, rep_num: int):
         obio.write_log('stop_log', config.paths['stop_logs'], stop_log_df, config.scenario, rep_num)
 
     # Print occupancy summary
-
     print(obio.occ_stats_to_string(occ_stats_df, config.scenario, rep_num))
 
     return scenario_rep_summary_dict

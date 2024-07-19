@@ -1,4 +1,4 @@
-# obflowsim - a flexible obstetric patient flow simulation model in Python
+# obflowsim - an obstetric patient flow simulation model in Python
 
 **IMPORTANT** The OB patient flow simulation metamodeling research project formerly residing in this repo has
 moved to its new home at [obflowsim-mm](https://github.com/misken/obflowsim-mm).

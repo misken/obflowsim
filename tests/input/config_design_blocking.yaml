@@ -48,8 +48,8 @@ rand_arrival_toggles:
 
 # A filename of '' (empty string) will shut off arrival stream    
 schedule_files:
-    sched_csect: ./tests/input/sched_c.txt
-    sched_induced_labor: ./tests/input/sched_induction.txt
+    sched_csect: ./input/sched_c.txt
+    sched_induced_labor: ./input/sched_induction.txt
 
 # 1=on, 0=off    
 sched_arrival_toggles:
@@ -115,8 +115,6 @@ los_distributions:
     RAND_NONDELIV_PP:
         PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
-# Do we need id's for the locations since this model has fixed set
-# of locations? Is the name attribute used?
 
 locations:
   ENTRY:
@@ -142,121 +140,121 @@ random_number_streams:
 routes:
   RAND_SPONT_REG:
     edges:
-    - from: ENTRY
-      id: ENTRY_OBS
+    - id: ENTRY_OBS
+      from: ENTRY
       to: OBS
-    - from: OBS
-      id: OBS_LDR
+    - id: OBS_LDR
+      from: OBS
       to: LDR
       blocking_adjustment: delay
-    - from: LDR
-      id: LDR_PP
+    - id: LDR_PP
+      from: LDR
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   RAND_SPONT_CSECT:
     edges:
-    - from: ENTRY
-      id: ENTRY_OBS
+    - id: ENTRY_OBS
+      from: ENTRY
       to: OBS
-    - from: OBS
-      id: OBS_LDR
+    - id: OBS_LDR
+      from: OBS
       to: LDR
       blocking_adjustment: delay
-    - from: LDR
-      id: LDR_CSECT
+    - id: LDR_CSECT
+      from: LDR
       to: CSECT
-    - from: CSECT
-      id: CSECT_pp
+    - id: CSECT_pp
+      from: CSECT
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   RAND_AUG_REG:
     edges:
-    - from: ENTRY
-      id: ENTRY_OBS
+    - id: ENTRY_OBS
+      from: ENTRY
       to: OBS
-    - from: OBS
-      id: OBS_LDR
+    - id: OBS_LDR
+      from: OBS
       to: LDR
       blocking_adjustment: delay
-    - from: LDR
-      id: LDR_PP
+    - id: LDR_PP
+      from: LDR
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   RAND_AUG_CSECT:
     edges:
-    - from: ENTRY
-      id: ENTRY_OBS
+    - id: ENTRY_OBS
+      from: ENTRY
       to: OBS
-    - from: OBS
-      id: OBS_LDR
+    - id: OBS_LDR
+      from: OBS
       to: LDR
       blocking_adjustment: delay
-    - from: LDR
-      id: LDR_CSECT
+    - id: LDR_CSECT
+      from: LDR
       to: CSECT
-    - from: CSECT
-      id: CSECT_pp
+    - id: CSECT_pp
+      from: CSECT
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   SCHED_CSECT:
     edges:
-    - from: ENTRY
-      id: ENTRY_CSECT
+    - id: ENTRY_CSECT
+      from: ENTRY
       to: CSECT
-    - from: CSECT
-      id: CSECT_pp
+    - id: CSECT_pp
+      from: CSECT
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   SCHED_IND_REG:
     edges:
-    - from: ENTRY
-      id: ENTRY_LDR
+    - id: ENTRY_LDR
+      from: ENTRY
       to: LDR
-    - from: LDR
-      id: LDR_PP
+    - id: LDR_PP
+      from: LDR
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   SCHED_IND_CSECT:
     edges:
-    - from: ENTRY
-      id: ENTRY_LDR
+    - id: ENTRY_LDR
+      from: ENTRY
       to: LDR
-    - from: LDR
-      id: LDR_CSECT
+    - id: LDR_CSECT
+      from: LDR
       to: CSECT
-    - from: CSECT
-      id: CSECT_pp
+    - id: CSECT_pp
+      from: CSECT
       to: PP
-    - from: PP
-      id: PP_EXIT
+    - id: PP_EXIT
+      from: PP
       to: EXIT
   RAND_NONDELIV_LDR:
     edges:
-    - from: ENTRY
-      id: ENTRY_LDR
+    - id: ENTRY_LDR
+      from: ENTRY
       to: LDR
-    - from: LDR
-      id: LDR_EXIT
+    - id: LDR_EXIT
+      from: LDR
       to: EXIT
   RAND_NONDELIV_PP:
     edges:
-    - from: ENTRY
-      id: ENTRY_PP
+    - id: ENTRY_PP
+      from: ENTRY
       to: PP
-    - from: PP
-      id: LDR_EXIT
+    - id: LDR_EXIT
+      from: PP
       to: EXIT
 
     

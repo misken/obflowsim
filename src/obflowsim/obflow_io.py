@@ -70,7 +70,7 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     Parameters
     ----------
     rg
-    raw_los_dist: Dict
+    raw_los_dists: Dict
     los_params: Dict
 
     Returns
@@ -105,8 +105,6 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
     return los_dists_partials, los_means
-
-
 
 
 def setup_output_paths(config, rep_num):
@@ -201,6 +199,7 @@ def write_occ_stats(occ_stats_path, occ_stats_df):
     """
 
     occ_stats_df.to_csv(occ_stats_path, index=False)
+
 
 def occ_stats_to_string(occ_stats_df, scenario, rep_num):
     """

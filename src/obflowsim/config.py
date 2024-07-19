@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 
 import pandas as pd
 import numpy as np
@@ -8,7 +9,13 @@ from typing import (
     Dict,
 )
 
+import simpy.core
+
 import obflowsim.obflow_io as obio
+
+
+class ConfigError(Exception):
+    """Exception raised for a variety of configuration errors."""
 
 
 class Config:
@@ -45,11 +52,38 @@ class Config:
     """
 
     def __init__(self, config_dict: Dict):
-        self.scenario = config_dict['scenario']
 
-        self.run_time = config_dict['run_settings']['run_time']
-        self.warmup_time = config_dict['run_settings']['warmup_time']
-        self.num_replications = config_dict['run_settings']['num_replications']
+        # Scenario
+        try:
+            self.scenario = config_dict['scenario']
+        except KeyError:
+            # Default scenario name using current datetime
+            ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
+            self.scenario = f'scenario_{ts}'
+
+        # Stopping conditions and other run time settings
+        try:
+            self.run_time = config_dict['run_settings']['run_time']
+        except KeyError:
+            self.run_time = simpy.core.Infinity
+
+        try:
+            self.max_arrivals = config_dict['run_settings']['max_arrivals']
+        except KeyError:
+            self.max_arrivals = simpy.core.Infinity
+
+        if self.run_time == simpy.core.Infinity and self.max_arrivals == simpy.core.Infinity:
+            raise ConfigError(f'Either run_time or max_arrivals must be specified.')
+
+        try:
+            self.warmup_time = config_dict['run_settings']['warmup_time']
+        except KeyError:
+            self.warmup_time = 0.0
+
+        try:
+            self.num_replications = config_dict['run_settings']['num_replications']
+        except KeyError:
+            self.num_replications = 1
 
         # Create random number generators
         self.rg = {}

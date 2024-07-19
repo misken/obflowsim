@@ -1,7 +1,7 @@
 #from enum import StrEnum
-from enum import Enum
+from enum import Enum, StrEnum
 
-class PatientType(Enum):
+class PatientType(StrEnum):
     """
     # Patient Type and Patient Flow Definitions
 
@@ -34,7 +34,7 @@ class PatientType(Enum):
     RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
 
 
-class ArrivalType(Enum):
+class ArrivalType(StrEnum):
     """
 
     """
@@ -48,26 +48,34 @@ class ArrivalType(Enum):
 
 class PatientTypeArrivalType:
     pat_type_to_arrival_type = {
-        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR.value,
-        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR.value,
-        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT.value,
-        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR.value,
-        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR.value,
-        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP.value,
+        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR,
+        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR,
+        PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR,
+        PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT,
+        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR,
+        PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR,
+        PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR,
+        PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP,
     }
 
-class UnitName(Enum):
+class UnitName(StrEnum):
     """
 
     """
     ENTRY = 'ENTRY'
     EXIT = 'EXIT'
+    OBS = 'OBS'
+    LDR = 'LDR'
+    CSECT = 'CSECT'
+    PP = 'PP'
+    LDRP = 'LDRP'
+    LD = 'LD'
+    RECOVERY = 'R'
 
+# TODO: Why is this commented out?
 # class OBunitId(IntEnum):
 #     ENTRY = 0
 #     OBS = 1

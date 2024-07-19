@@ -33,6 +33,8 @@ from obflowsim.obflow_sim import PatientFlowSystem
 class PatientTypeSummary():
     """
     Stores counts and accumulated length of stay by patient type
+
+    TODO: finish this
     """
 
     def __init__(self):
@@ -366,7 +368,7 @@ def aggregate_over_reps(scen_rep_summary_path, active_units=('OBS', 'LDR', 'CSEC
 
     unit_dfs = []
 
-    # Need better, more generalizable way to do this, but good enough for now.
+    # TODO: Need better, more generalizable way to do this, but good enough for now.
     if 'OBS' in active_units:
         output_stats_summary_agg_obs_df = output_stats_summary_df.groupby(['scenario']).agg(
             num_visits_obs_mean=pd.NamedAgg(column='num_visits_obs', aggfunc='mean'),
