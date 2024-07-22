@@ -65,8 +65,8 @@ class UnitName(StrEnum):
     """
 
     """
-    # ENTRY = 'ENTRY'
-    # EXIT = 'EXIT'
+    ENTRY = 'ENTRY'
+    EXIT = 'EXIT'
     OBS = 'OBS'
     LDR = 'LDR'
     CSECT = 'CSECT'
