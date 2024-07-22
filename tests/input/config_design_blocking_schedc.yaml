@@ -117,8 +117,6 @@ los_distributions:
 
 
 locations:
-  ENTRY:
-    capacity: 1000
   OBS:
     capacity: 1000
   LDR:
@@ -127,8 +125,7 @@ locations:
     capacity: 1000
   PP:
     capacity: 30
-  EXIT:
-    capacity: 1000
+
 
     
 
