@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
     Dict,
-    Union,
+    List,
 )
 
 from numpy.typing import (
@@ -36,6 +36,7 @@ from obflowsim.config import Config
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar
 
+
 # TODO - make sure all docstrings are complete
 
 
@@ -53,6 +54,10 @@ class PatientFlowSystem:
         self.config = config
         self.sim_calendar = sim_calendar
         self.router = None  # TODO: What's up with this?
+
+        # Create entry and exit nodes
+        self.entry = EntryNode()
+        self.exit = ExitNode()
 
         # Create units container and individual patient care units
         self.patient_care_units = {}
@@ -134,7 +139,7 @@ class Patient:
 
         # Initiate process of patient entering system
         self.patient_flow_system.env.process(
-            self.patient_flow_system.patient_care_units[UnitName.ENTRY].put(self, self.patient_flow_system))
+            self.patient_flow_system.entry.put(self, self.patient_flow_system))
 
     def assign_patient_type(self):
         if self.arrival_type == ArrivalType.SPONT_LABOR.value:
@@ -260,7 +265,7 @@ class StaticRouter(Router):
 
                 # Add blocking adjustment attribute
                 if 'blocking_adjustment' in edge:
-                    nx.set_edge_attributes(route_graph,{
+                    nx.set_edge_attributes(route_graph, {
                         (edge['from'], edge['to']): {'blocking_adjustment': edge['blocking_adjustment']}})
                 else:
                     nx.set_edge_attributes(route_graph, {
@@ -365,9 +370,7 @@ class StaticRouter(Router):
 
 class EntryNode:
 
-
     def __init__(self, env: Environment, name: str = 'ENTRY'):
-
         self.env = env
         self.name = name
 
@@ -405,12 +408,9 @@ class EntryNode:
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} ready to leave {self.name} node.")
 
-        # Go to first PatientCareUnit
-        if patient.current_unit_name != UnitName.EXIT.value:
-            # Determine next stop in route and try to get a bed in that unit
-            patient.next_unit_name = patient.patient_flow_system.router.get_next_stop(patient)
-            self.env.process(obsystem.patient_care_units[patient.next_unit_name].put(patient, obsystem))
-
+        # Determine first stop in route and try to get a bed in that unit
+        patient.next_unit_name = patient.patient_flow_system.router.get_next_stop(patient)
+        self.env.process(obsystem.patient_care_units[patient.next_unit_name].put(patient, obsystem))
 
     def inc_occ(self, increment=1):
         """Update occupancy - increment by 1"""
@@ -454,7 +454,6 @@ class ExitNode:
 
         """
 
-
         # Update unit attributes
         self.num_entries += 1
         self.last_entry_ts = self.env.now
@@ -492,37 +491,6 @@ class ExitNode:
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} exited system at {self.env.now:.2f}.")
 
-    def inc_occ(self, increment=1):
-        """Update occupancy - increment by 1"""
-        prev_occ = self.occupancy_list[-1][1]
-        new_ts_occ = (self.env.now, prev_occ + increment)
-        self.occupancy_list.append(new_ts_occ)
-
-    def dec_occ(self, decrement=1):
-        """Update occupancy - decrement by 1"""
-        prev_occ = self.occupancy_list[-1][1]
-        new_ts_occ = (self.env.now, prev_occ - decrement)
-        self.occupancy_list.append(new_ts_occ)
-
-    def basic_flow_stats_msg(self):
-        """ Compute entries, exits, avg los and create summary message.
-
-        Returns
-        -------
-        str
-            Message with basic stats
-        """
-
-        if self.num_exits > 0:
-            alos = self.tot_occ_time / self.num_exits
-        else:
-            alos = 0
-
-        msg = "{:6}:\t Entries={}, Exits={}, Occ={}, ALOS={:4.2f}". \
-            format(self.name, self.num_entries, self.num_exits,
-                   self.unit.count, alos)
-        return msg
-
 
 class PatientCareUnit:
     """ Models an OB unit with fixed capacity.
@@ -542,7 +510,7 @@ class PatientCareUnit:
 
         self.env = env
         self.name = name
-        #self.id = name
+        # self.id = name
         self.capacity = capacity
 
         # Use a simpy Resource as one of the class instance members
