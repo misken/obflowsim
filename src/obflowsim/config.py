@@ -11,6 +11,7 @@ from typing import (
 
 import simpy.core
 
+import obflowsim.constants as obconstants
 import obflowsim.obflow_io as obio
 
 
@@ -62,51 +63,59 @@ class Config:
             self.scenario = f'scenario_{ts}'
 
         # Calendar related
-        self.use_calendar_time = config_dict['run_settings']['use_calendar_time']
-        if 'start_date' in config_dict['run_settings']:
-            self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
-        else:
-            # Default start_date is first Monday in 2024
-            self.start_date = pd.Timestamp('2024-01-01')
+        try:
+            self.use_calendar_time = config_dict['run_settings']['use_calendar_time']
+        except KeyError:
+            self.use_calendar_time = obconstants.DEFAULT_USE_CALENDAR_TIME
 
-        self.base_time_unit = config_dict['run_settings']['base_time_unit']
-        if self.base_time_unit not in ['h', 'm']:
-            raise ValueError('Base time unit must be h or m.')
+        try:
+            self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
+        except KeyError:
+            # Default start_date is first Monday in 2024
+            self.start_date = pd.Timestamp(obconstants.DEFAULT_START_DATE)
+
+        try:
+            self.base_time_unit = config_dict['run_settings']['base_time_unit']
+            if self.base_time_unit not in ['h', 'm']:
+                raise ValueError('Base time unit must be h or m.')
+        except KeyError:
+            # Default start_date is first Monday in 2024
+            self.base_time_unit = obconstants.DEFAULT_BASE_TIME_UNIT
 
         # Stopping conditions and other run time settings
         try:
             self.run_time = config_dict['run_settings']['run_time']
         except KeyError:
-            self.run_time = simpy.core.Infinity
+            self.run_time = obconstants.DEFAULT_RUN_TIME
 
         try:
             self.max_arrivals = config_dict['run_settings']['max_arrivals']
         except KeyError:
-            self.max_arrivals = simpy.core.Infinity
+            self.max_arrivals = obconstants.DEFAULT_MAX_ARRIVALS
 
         if self.run_time == simpy.core.Infinity and self.max_arrivals == simpy.core.Infinity:
-            raise ConfigError(f'Either run_time or max_arrivals must be specified.')
+            raise ConfigError(f'Either run_time or max_arrivals must be finite.')
 
         try:
             self.warmup_time = config_dict['run_settings']['warmup_time']
         except KeyError:
-            self.warmup_time = 0.0
+            self.warmup_time = obconstants.DEFAULT_WARMUP_TIME
 
         try:
             self.num_replications = config_dict['run_settings']['num_replications']
         except KeyError:
-            self.num_replications = 1
+            self.num_replications =  obconstants.DEFAULT_NUM_REPLICATIONS
 
         # Create random number generators
         self.rg = {}
         for stream, seed in config_dict['random_number_streams'].items():
             self.rg[stream] = default_rng(seed)
 
-        # Arrival rates
+        # Random arrival rates and toggles
         self.rand_arrival_rates = config_dict['rand_arrival_rates']
         self.rand_arrival_toggles = config_dict['rand_arrival_toggles']
 
-        # Schedules
+        # Scheduled arrivals and toggles
         self.schedules = {}
         if 'sched_csect' in config_dict['schedule_files']:
             sched_file_c = config_dict['schedule_files']['sched_csect']
@@ -125,8 +134,8 @@ class Config:
 
         # Length of stay
         self.los_params = config_dict['los_params']
-        self.los_distributions, self.los_means = obio._create_los_partials(config_dict['los_distributions'],
-                                                                           self.los_params, self.rg['los'])
+        self.los_distributions, self.los_means = obio.create_los_partials(config_dict['los_distributions'],
+                                                                          self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
         self.routes = config_dict['routes']

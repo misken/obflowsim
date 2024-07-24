@@ -30,8 +30,7 @@ from typing import (
 )
 
 import obflowsim.obflow_stat as obstat
-
-ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform']
+import obflowsim.constants as obconstants
 
 
 def load_config(cfg):
@@ -66,7 +65,7 @@ def _convert_str_to_func_name(s):
     return s[:s.find('(')]
 
 
-def _create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
+def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     """
 
     Parameters
@@ -98,11 +97,11 @@ def _create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
         for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
             func_name = _convert_str_to_func_name(raw_dist_str)
             # Check for valid func name
-            if func_name in ALLOWED_LOS_DIST_LIST:
+            if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
                 args, kwargs = _convert_str_to_args_and_kwargs(raw_dist_str)
-                partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
+                partial_dist_func = partial(eval(f'rg.{func_name}'), *args, **kwargs)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
-                los_means[key_pat_type][key_unit] = obstat.mean_from_dist_params(func_name, args)
+                los_means[key_pat_type][key_unit] = obstat.mean_from_dist_params(func_name, args, kwargs)
             else:
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
@@ -115,6 +114,8 @@ def process_schedule_file(sched_file: str | Path, start_date: Timestamp, base_ti
     Parameters
     ----------
     sched_file
+    start_date
+    base_time_unit
 
     Returns
     -------

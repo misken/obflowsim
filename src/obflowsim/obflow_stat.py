@@ -43,7 +43,7 @@ class PatientTypeSummary():
         self.tot_patient_hours = {i.name: 0.0 for i in PatientType}
 
 
-def mean_from_dist_params(dist_name: str, params: Tuple):
+def mean_from_dist_params(dist_name: str, params: Tuple, kwparams):
     """
     Compute mean from distribution name and parameters - numpy based
 
@@ -74,6 +74,10 @@ def mean_from_dist_params(dist_name: str, params: Tuple):
         _left = params[0]
         _right = params[1]
         _mean = (_left + _right) / 2
+    elif dist_name == 'choice':
+        _a = params[0]
+        _p = kwparams['p']
+        _mean = sum(x * y for x, y in zip(_a, _p))
     else:
         raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
 
@@ -87,10 +91,6 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     Parameters
     ----------
     obsystem : PatientFlowSystem
-    end_time : float, simulation end time
-    egress : bool, if True compute statistics for ENTER and EXIT (default is False)
-    log_path : str or Path, location of log files
-    warmup : float, simulation warm-up time
     quantiles : tuple, qauntiles to compute
 
     Returns

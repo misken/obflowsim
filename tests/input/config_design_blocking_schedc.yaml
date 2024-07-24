@@ -5,10 +5,10 @@ run_settings:
   run_time: 7200
   warmup_time: 1200
   
-  # Uncomment the following to use max_arrivals as additional stopping condition
-  # max_arrivals = 10000
+  # Uncomment the following to use max_arrivals as additional or alternate stopping condition
+  # max_arrivals = 1000
   
-  # h = hours, m = minutes
+  # h = hours
   base_time_unit: h
   
   # Comment out start_date line to use default of 2024-01-01
@@ -32,7 +32,7 @@ outputs:
     path: ./output/stats
     write: 1
 
-# A rate of 0.0 will shut off the arrival stream
+# Use toggles to turn random arrival streams on and off   
 rand_arrival_rates:
     spont_labor: 0.20
     urgent_induced_labor: 0.00
@@ -46,7 +46,7 @@ rand_arrival_toggles:
     non_delivery_ldr: 1
     non_delivery_pp: 1
 
-# A filename of '' (empty string) will shut off arrival stream    
+# Use toggles to turn scheduled arrival streams on and off   
 schedule_files:
     sched_csect: ./input/sched_c_long.txt
     sched_induced_labor: ./input/sched_induction_long.txt
@@ -80,36 +80,43 @@ los_params:
     num_erlang_stages_pp_nondelivery: 4
 
 # You can use a restricted set of numpy distributions parameterized via
-# constants that are user defined parameters in the los_params section.  
+# constants that are user defined parameters in the los_params section. 
+#  
 los_distributions:
     RAND_SPONT_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+        # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
     RAND_SPONT_CSECT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+        # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     RAND_AUG_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+        # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
     RAND_AUG_CSECT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+        # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     SCHED_CSECT:
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
     SCHED_IND_REG:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_noc / num_erlang_stages_pp)
+        # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
     SCHED_IND_CSECT:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+        PP:  # For PP, the choice values are in days
+        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     RAND_NONDELIV_LDR:
         LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
     RAND_NONDELIV_PP:
@@ -127,11 +134,9 @@ locations:
     capacity: 30
 
 
-    
-
 random_number_streams:
-  arrivals: 27
-  los: 31
+  arrivals: 27568
+  los: 31249
   
   
 routes:
