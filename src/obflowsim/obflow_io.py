@@ -1,8 +1,10 @@
 import sys
 import argparse
 from pathlib import Path
+from enum import IntEnum
 
 import pandas as pd
+from pandas import Timestamp
 import yaml
 import json
 
@@ -52,19 +54,19 @@ def load_config(cfg):
     return yaml_config
 
 
-def get_args_and_kwargs(*args, **kwargs):
+def _get_args_and_kwargs(*args, **kwargs):
     return args, kwargs
 
 
-def convert_str_to_args_and_kwargs(s):
-    return eval(s.replace(s[:s.find('(')], 'get_args_and_kwargs'))
+def _convert_str_to_args_and_kwargs(s):
+    return eval(s.replace(s[:s.find('(')], '_get_args_and_kwargs'))
 
 
-def convert_str_to_func_name(s):
+def _convert_str_to_func_name(s):
     return s[:s.find('(')]
 
 
-def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
+def _create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     """
 
     Parameters
@@ -94,10 +96,10 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
     los_means = copy.deepcopy(los_dists_instantiated)
     for key_pat_type in los_dists_partials:
         for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
-            func_name = convert_str_to_func_name(raw_dist_str)
+            func_name = _convert_str_to_func_name(raw_dist_str)
             # Check for valid func name
             if func_name in ALLOWED_LOS_DIST_LIST:
-                args, kwargs = convert_str_to_args_and_kwargs(raw_dist_str)
+                args, kwargs = _convert_str_to_args_and_kwargs(raw_dist_str)
                 partial_dist_func = partial(eval(f'rg.{func_name}'), *args)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
                 los_means[key_pat_type][key_unit] = obstat.mean_from_dist_params(func_name, args)
@@ -105,6 +107,48 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
     return los_dists_partials, los_means
+
+
+def process_schedule_file(sched_file: str | Path, start_date: Timestamp, base_time_unit: str):
+    """
+
+    Parameters
+    ----------
+    sched_file
+
+    Returns
+    -------
+
+    """
+    Weekdays = IntEnum('Weekdays', 'mon tue wed thu fri sat sun', start=0)
+    start_dow = start_date.weekday()
+
+    with open(sched_file, 'r') as f:
+        sched_lines = [line.strip().split(',') for line in f.readlines()]
+
+    new_sched_lines = []
+    for line in sched_lines:
+        line[0] = line[0].lower()
+        dow = Weekdays[line[0]].value
+        line[1] = float(line[1])
+        line[2] = int(line[2])
+
+        # Compute entry_delay as offset from start_date
+        if dow >= start_dow:
+            num_days = dow - start_dow
+        else:
+            num_days = 7 - (start_dow - dow)
+
+        if base_time_unit == 'h':
+            entry_delay_time = 24 * num_days + line[1]
+        elif base_time_unit == 'm':
+            entry_delay_time = 1440 * num_days + line[1]
+        else:
+            raise ValueError('Base time unit must be h or m.')
+
+        new_sched_lines.append([entry_delay_time, line[2]])
+
+    return new_sched_lines
 
 
 def setup_output_paths(config, rep_num):
@@ -132,7 +176,7 @@ def write_log(which_log, log_path, df, scenario, rep_num, egress=True):
     -------
 
     """
-    csv_path =  Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
+    csv_path = Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
 
     if egress:
         df.to_csv(csv_path, index=False)
@@ -242,7 +286,6 @@ def write_summary_stats(summary_stats_path, summary_stats_df):
 
 
 def output_header(msg, linelen, scenario, rep_num):
-
     header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * linelen}"
     return header
 

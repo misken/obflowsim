@@ -87,3 +87,43 @@ dedicated ENTRY and EXIT object types.
 Created new branch called 'egress_nodes' to test this idea. The commit right before
 this branch created contains non-working code for scheduled arrivals using old
 approach of ENTRY and EXIT as `PatientCareUnit` objects.
+
+#### Commit 2d78c85 implements egress nodes
+
+Added `EntryNode` and `ExitNode` as part of `PatientFlowSystem`. These nodes handle entry and exit logic.
+
+- removed ENTRY and EXIT from Locations section of config
+- kept both ENTRY and EXIT in routing section and these will be required. Otherwise, things like 
+routes with a single stop get awkward to enter. Now every route has at least three nodes and two edges.
+
+### Scheduled arrivals
+
+Currently, the input file for scheduled arrivals has one column per hour and one row per day of week. The values
+represent the number of cases scheduled at that time. We need to make this more flexible.
+
+#### Option 1: Each row is explicit time
+
+This approach only stores the non-zero times that cases are scheduled as is assumed to repeat each week.
+Time units are in same as `base_time_unit` specified in config - usually hours.
+```
+# simtime, num scheduled
+6.0, 1
+7.5, 1
+10.0, 2
+```
+
+This is a little tricky in terms of readability because we don't know the day of week for "day 1" and values
+after one day are tough to mentally translate. 
+
+#### Option 2: Each row is explicit DOW and time
+
+This approach only stores both the DOW and the non-zero times that cases are scheduled as is assumed to repeat each week.
+Time units are in same as `base_time_unit` specified in config - usually hours.
+
+```
+# DOW, TOD, num scheduled
+Mon, 6.0, 1
+Mon, 7.5, 1
+Tue, 10.0, 2
+...
+```

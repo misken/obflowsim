@@ -61,6 +61,18 @@ class Config:
             ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
             self.scenario = f'scenario_{ts}'
 
+        # Calendar related
+        self.use_calendar_time = config_dict['run_settings']['use_calendar_time']
+        if 'start_date' in config_dict['run_settings']:
+            self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
+        else:
+            # Default start_date is first Monday in 2024
+            self.start_date = pd.Timestamp('2024-01-01')
+
+        self.base_time_unit = config_dict['run_settings']['base_time_unit']
+        if self.base_time_unit not in ['h', 'm']:
+            raise ValueError('Base time unit must be h or m.')
+
         # Stopping conditions and other run time settings
         try:
             self.run_time = config_dict['run_settings']['run_time']
@@ -97,12 +109,14 @@ class Config:
         # Schedules
         self.schedules = {}
         if 'sched_csect' in config_dict['schedule_files']:
-            sched_file = config_dict['schedule_files']['sched_csect']
-            self.schedules['sched_csect'] = np.loadtxt(sched_file, dtype=int)
+            sched_file_c = config_dict['schedule_files']['sched_csect']
+            self.schedules['sched_csect'] = obio.process_schedule_file(sched_file_c,
+                                                                       self.start_date, self.base_time_unit)
 
         if 'sched_induced_labor' in config_dict['schedule_files']:
-            sched_file = config_dict['schedule_files']['sched_induced_labor']
-            self.schedules['sched_induced_labor'] = np.loadtxt(sched_file, dtype=int)
+            sched_file_ind = config_dict['schedule_files']['sched_induced_labor']
+            self.schedules['sched_induced_labor'] = obio.process_schedule_file(sched_file_ind,
+                                                                               self.start_date, self.base_time_unit)
 
         self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
 
@@ -111,22 +125,12 @@ class Config:
 
         # Length of stay
         self.los_params = config_dict['los_params']
-        self.los_distributions, self.los_means = obio.create_los_partials(config_dict['los_distributions'],
-                                                                          self.los_params, self.rg['los'])
+        self.los_distributions, self.los_means = obio._create_los_partials(config_dict['los_distributions'],
+                                                                           self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
         self.routes = config_dict['routes']
         self.outputs = config_dict['outputs']
-
-        # Calendar related
-        self.use_calendar_time = config_dict['run_settings']['use_calendar_time']
-        if 'start_date' in config_dict['run_settings']:
-            self.start_date = pd.Timestamp(config_dict['run_settings']['start_date'])
-        else:
-            # Default start_date is first Monday after Unix epoch
-            self.start_date = pd.Timestamp('1970-01-05')
-
-        self.base_time_unit = config_dict['run_settings']['base_time_unit']
 
         # Output paths
         outputs = self.outputs.keys()

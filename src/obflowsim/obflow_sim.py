@@ -800,16 +800,8 @@ class PatientGeneratorWeeklyStaticSchedule:
         # Main generator loop that terminates when stopping condition reached
         while self.env.now < self.stop_time and self.num_patients_created < self.max_arrivals:
 
-            # Create arrival epoch tuples (day, hour, num scheduled)
-            arrival_epochs = [(d, h, self.schedule[d, h]) for d in range(6)
-                              for h in range(23) if self.schedule[d, h] > 0]
-
             # Create schedule patients and send them to ENTRY to wait until their scheduled procedure time
-            for (day, hour, num_sched) in arrival_epochs:
-                # Compute number of time units from the start of current week until scheduled procedure time
-                time_of_week = \
-                    pd.to_timedelta(day * 24 + hour, unit='h') / pd.to_timedelta(1, unit=base_time_unit)
-
+            for (time_of_week, num_sched) in self.schedule:
                 for patient in range(num_sched):
                     self.num_patients_created += 1
                     new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
