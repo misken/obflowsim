@@ -104,9 +104,7 @@ class Patient:
         self.arrival_type = arrival_type
         self.system_arrival_ts = arr_time + entry_delay
         self.entry_delay = entry_delay
-        self.patient_flow_system = patient_flow_system
-        self.config = patient_flow_system.config
-        self.arr_stream_rg = self.config.rg['arrivals']
+        self.pfs = patient_flow_system
 
         # Determine patient type
         self.patient_type = self.assign_patient_type()
@@ -114,41 +112,66 @@ class Patient:
         # Initialize unit stop attributes
         self.current_stop_num = -1
 
-        # Get route and set route attributes
-        self.route_graph = self.patient_flow_system.router.create_route(self)
-        self.route_length = len(self.route_graph.edges) + 1  # Includes ENTRY and EXIT
+        # Get route
+        self.route_graph = self.pfs.router.create_route(self)
 
         # Since we have fixed route, just initialize full list to hold bed requests
         # The index numbers are stop numbers and so slot 0 is for ENTRY location
         # TODO: Should we start with empty lists and append as we go?
-        self.bed_requests = [None for _ in range(self.route_length)]
-        self.unit_stops = [None for _ in range(self.route_length)]
-        self.planned_los = [None for _ in range(self.route_length)]
-        self.adjusted_los = [None for _ in range(self.route_length)]
-        self.request_entry_ts = [None for _ in range(self.route_length)]
-        self.entry_ts = [None for _ in range(self.route_length)]
-        self.wait_to_enter = [None for _ in range(self.route_length)]
-        self.request_exit_ts = [None for _ in range(self.route_length)]
-        self.exit_ts = [None for _ in range(self.route_length)]
-        self.wait_to_exit = [None for _ in range(self.route_length)]
-        self.system_exit_ts = None
+        # Starting with empty lists sets us up for dynamic routing and also
+        # might help avoid referencing elements in the patient path future.
+        # route_length = self.get_route_length_nodes()
+        # self.bed_requests = [None for _ in range(route_length)] # simpy request() events
+        # self.unit_stops = [None for _ in range(route_length)] # unit name
+        # self.planned_los = [None for _ in range(route_length)]
+        # self.adjusted_los = [None for _ in range(route_length)]
+        # self.request_entry_ts = [None for _ in range(route_length)]
+        # self.entry_ts = [None for _ in range(route_length)]
+        # self.wait_to_enter = [None for _ in range(route_length)]
+        # self.request_exit_ts = [None for _ in range(route_length)]
+        # self.exit_ts = [None for _ in range(route_length)]
+        # self.wait_to_exit = [None for _ in range(route_length)]
+        # self.system_exit_ts = None
+
+        self.bed_requests = [] # simpy request() events
+        self.unit_stops = [] # unit name
+        self.planned_los = []
+        self.adjusted_los = []
+        self.request_entry_ts = []
+        self.entry_ts = []
+        self.wait_to_enter = []
+        self.request_exit_ts = []
+        self.exit_ts = []
+        self.wait_to_exit = []
+        self.system_exit_ts = None # redundant, get from exit_ts last element
 
         # Initiate process of patient entering system
-        self.patient_flow_system.env.process(
-            self.patient_flow_system.entry.put(self, self.patient_flow_system))
+        self.pfs.env.process(
+            self.pfs.entry.put(self, self.pfs))
+
+    def get_route_length_nodes(self):
+        """
+        Get the number of nodes in the current route including entry and exit nodes.
+
+        Returns
+        -------
+        int: number of nodes
+        """
+        return len(self.route_graph.edges) + 1
 
     def assign_patient_type(self):
+        arr_stream_rg = self.pfs.config.rg['arrivals']
         if self.arrival_type == ArrivalType.SPONT_LABOR.value:
             # Determine if labor augmented or not
-            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_aug']:
+            if arr_stream_rg.random() < self.pfs.config.branching_probabilities['pct_spont_labor_aug']:
                 # Augmented labor
-                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_aug_labor_to_c']:
+                if arr_stream_rg.random() < self.pfs.config.branching_probabilities['pct_aug_labor_to_c']:
                     return PatientType.RAND_AUG_CSECT.value
                 else:
                     return PatientType.RAND_AUG_REG.value
             else:
                 # Labor not augmented
-                if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_spont_labor_to_c']:
+                if arr_stream_rg.random() < self.pfs.config.branching_probabilities['pct_spont_labor_to_c']:
                     return PatientType.RAND_SPONT_CSECT.value
                 else:
                     return PatientType.RAND_SPONT_REG.value
@@ -157,7 +180,7 @@ class Patient:
         elif self.arrival_type == ArrivalType.NON_DELIVERY_PP.value:
             return PatientType.RAND_NONDELIV_PP.value
         elif self.arrival_type == ArrivalType.URGENT_INDUCED_LABOR.value:
-            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_urg_ind_to_c']:
+            if arr_stream_rg.random() < self.pfs.config.branching_probabilities['pct_urg_ind_to_c']:
                 return PatientType.URGENT_IND_CSECT.value
             else:
                 return PatientType.URGENT_IND_REG.value
@@ -166,46 +189,31 @@ class Patient:
             return PatientType.SCHED_CSECT.value
         else:
             # Determine if scheduled induction ends up with c-section
-            if self.arr_stream_rg.random() < self.config.branching_probabilities['pct_sched_ind_to_c']:
+            if arr_stream_rg.random() < self.pfs.config.branching_probabilities['pct_sched_ind_to_c']:
                 return PatientType.SCHED_IND_CSECT.value
             else:
                 return PatientType.SCHED_IND_REG.value
 
-    # def exit_system(self, env, obsystem):
-    #
-    #     logging.debug(
-    #         f"{env.now:.4f}: {self.patient_id} exited system at {env.now:.2f}.")
-    #
-    #     obsystem.patient_type_summary.num_exits.update({self.patient_type: 1})
-    #
-    #     # Create dictionaries of timestamps for patient_stop log
-    #     for stop in range(len(self.unit_stops)):
-    #         if self.unit_stops[stop] is not None:
-    #             # noinspection PyUnresolvedReferences
-    #             timestamps = {'patient_id': self.patient_id,
-    #                           'patient_type': self.patient_type,
-    #                           'arrival_type': self.arrival_type,
-    #                           'unit': self.unit_stops[stop],
-    #                           'request_entry_ts': self.request_entry_ts[stop],
-    #                           'entry_ts': self.entry_ts[stop],
-    #                           'request_exit_ts': self.request_exit_ts[stop],
-    #                           'exit_ts': self.exit_ts[stop],
-    #                           'planned_los': self.planned_los[stop],
-    #                           'adjusted_los': self.adjusted_los[stop],
-    #                           'entry_tryentry': self.entry_ts[stop] - self.request_entry_ts[stop],
-    #                           'tryexit_entry': self.request_exit_ts[stop] - self.entry_ts[stop],
-    #                           'exit_tryexit': self.exit_ts[stop] - self.request_exit_ts[stop],
-    #                           'exit_enter': self.exit_ts[stop] - self.entry_ts[stop],
-    #                           'exit_tryenter': self.exit_ts[stop] - self.request_entry_ts[stop],
-    #                           'wait_to_enter': self.wait_to_enter[stop],
-    #                           'wait_to_exit': self.wait_to_exit[stop],
-    #                           'bwaited_to_enter': self.entry_ts[stop] > self.request_entry_ts[stop],
-    #                           'bwaited_to_exit': self.exit_ts[stop] > self.request_exit_ts[stop]}
-    #
-    #             obsystem.stops_timestamps_list.append(timestamps)
+    def append_empty_unit_stop(self):
+        """
+        Append None placeholders to patient flow lists
 
+        Returns
+        -------
+
+        """
+        self.bed_requests.append(None)
+        self.unit_stops.append(None)
+        self.planned_los.append(None)
+        self.adjusted_los.append(None)
+        self.request_entry_ts.append(None)
+        self.entry_ts.append(None)
+        self.wait_to_enter.append(None)
+        self.request_exit_ts.append(None)
+        self.exit_ts.append(None)
+        self.wait_to_exit.append(None)
     def __repr__(self):
-        return "patientuid: {}, patient_type: {}, time: {}". \
+        return "patient id: {}, patient_type: {}, time: {}". \
             format(self.patient_id, self.patient_type, self.system_arrival_ts)
 
 
@@ -355,28 +363,28 @@ class StaticRouter(Router):
         successors = [n for n in G.successors(current_unit_name)]
         next_unit_name = successors[0]
 
-        if next_unit_name is None:
-            if patient.current_stop_num == patient.route_length:
-                # Patient is at last stop
-                pass
-            else:
-                logging.error(
-                    f"{self.env.now:.4f}: {patient.patient_id} has no next unit at {current_unit_name}.")
-            exit(1)
-
-        else:
-            if next_unit_name == UnitName.EXIT:
-                next_unit_name = None
-
-        logging.debug(
-            f"{self.env.now:.4f}: {patient.patient_id} current_unit_name {current_unit_name}, next_unit_name {next_unit_name}")
+        # if next_unit_name is None:
+        #     if patient.current_stop_num == patient.route_length:
+        #         # Patient is at last stop
+        #         pass
+        #     else:
+        #         logging.error(
+        #             f"{self.env.now:.4f}: {patient.patient_id} has no next unit at {current_unit_name}.")
+        #     exit(1)
+        #
+        # else:
+        #     if next_unit_name == UnitName.EXIT:
+        #         next_unit_name = None
+        #
+        # logging.debug(
+        #     f"{self.env.now:.4f}: {patient.patient_id} current_unit_name {current_unit_name}, next_unit_name {next_unit_name}")
 
         return next_unit_name
 
 
 class EntryNode:
 
-    def __init__(self, env: Environment, name: str = 'ENTRY'):
+    def __init__(self, env: Environment, name: str = UnitName.ENTRY):
         self.env = env
         self.name = name
 
@@ -410,7 +418,14 @@ class EntryNode:
         # Increment occupancy
         self.inc_occ()
 
+        # Update patient attributes
         patient.current_stop_num = 0
+        csn = patient.current_stop_num
+        patient.append_empty_unit_stop()
+        patient.bed_requests[csn] = None # No request event needed for ENTRY node
+        patient.unit_stops[csn] = UnitName.ENTRY
+        patient.request_entry_ts[csn] = self.env.now
+        patient.entry_ts[csn] = self.env.now
 
         # Wait for any entry_delay needed
         yield self.env.timeout(patient.entry_delay)
@@ -419,7 +434,7 @@ class EntryNode:
             f"{self.env.now:.4f}: {patient.patient_id} ready to leave {self.name} node.")
 
         # Determine first stop in route and try to get a bed in that unit
-        next_unit_name = patient.patient_flow_system.router.get_next_stop(patient)
+        next_unit_name = patient.pfs.router.get_next_stop(patient)
         self.env.process(obsystem.patient_care_units[next_unit_name].put(patient, obsystem))
 
     def inc_occ(self, increment=1):
@@ -441,7 +456,7 @@ class ExitNode:
 
     """
 
-    def __init__(self, env: Environment, name: str = 'EXIT'):
+    def __init__(self, env: Environment, name: str = UnitName.EXIT):
 
         self.env = env
         self.name = name
@@ -468,6 +483,21 @@ class ExitNode:
         self.num_entries += 1
         self.last_entry_ts = self.env.now
         self.last_exit_ts = self.env.now
+
+        # Increment stop number for this patient
+        patient.current_stop_num += 1
+        csn = patient.current_stop_num
+        patient.append_empty_unit_stop() # Appends None to all patient flow related lists
+        patient.bed_requests[csn] = None # No request event needed for EXIT node
+        patient.unit_stops[csn] = UnitName.EXIT
+        patient.planned_los[csn] = 0.0
+        patient.adjusted_los[csn] = 0.0
+        patient.request_entry_ts[csn] = self.env.now
+        patient.entry_ts[csn] = self.env.now
+        patient.wait_to_enter[csn] = 0.0
+        patient.request_exit_ts[csn] = self.env.now
+        patient.exit_ts[csn] = self.env.now
+        patient.wait_to_exit[csn] = 0.0
 
         # Update counter
         obsystem.patient_type_summary.num_exits.update({patient.patient_type: 1})
@@ -520,7 +550,6 @@ class PatientCareUnit:
 
         self.env = env
         self.name = name
-        # self.id = name
         self.capacity = capacity
 
         # Use a simpy Resource as one of the class instance members
@@ -536,7 +565,7 @@ class PatientCareUnit:
         # Create list to hold occupancy tuples (time, occ)
         self.occupancy_list = [(0.0, 0.0)]
 
-    def put(self, patient: Patient, obsystem: PatientFlowSystem):
+    def put(self, patient: Patient, pfs: PatientFlowSystem):
         """
         A process method called when a bed is requested in the unit.
 
@@ -544,122 +573,127 @@ class PatientCareUnit:
         ----------
         patient : OBPatient object
             the patient requesting the bed
-        obsystem : OBSystem object
+        pfs : OBSystem object
 
         """
 
         # Increment stop number for this patient
         patient.current_stop_num += 1
-        current_stop_num = patient.current_stop_num
+        csn = patient.current_stop_num
+        patient.append_empty_unit_stop() # Appends None to all patient flow related lists
         logging.debug(
-            f"{self.env.now:.4f}: {patient.patient_id} trying to get {self.name} for stop_num {current_stop_num}")
+            f"{self.env.now:.4f}: {patient.patient_id} trying to get {self.name} for stop_num {patient.current_stop_num}")
 
         # Timestamp of request time
         bed_request_ts = self.env.now
         # Request a bed
         bed_request = self.unit.request()
         # Store bed request and timestamp in patient's request lists
-        patient.bed_requests[current_stop_num] = bed_request
-        patient.unit_stops[current_stop_num] = self.name
-        patient.request_entry_ts[current_stop_num] = self.env.now
+        patient.bed_requests[csn] = bed_request
+        patient.unit_stops[csn] = self.name
+        patient.request_entry_ts[csn] = self.env.now
 
         # If we are coming from upstream unit, we are trying to exit that unit now
-        if patient.bed_requests[current_stop_num - 1] is not None:
-            patient.request_exit_ts[current_stop_num - 1] = self.env.now
+        if patient.bed_requests[patient.current_stop_num - 1] is not None:
+            patient.request_exit_ts[patient.current_stop_num - 1] = self.env.now
 
         # Yield until we get a bed
         yield bed_request
 
-        # Seized a bed.
-        # Update patient flow attributes for this stop
-        patient.entry_ts[current_stop_num] = self.env.now
-        patient.wait_to_enter[current_stop_num] = \
-            self.env.now - patient.request_entry_ts[current_stop_num]
+        # Seized a bed. Update patient flow attributes for this stop
+        patient.entry_ts[csn] = self.env.now
+        patient.wait_to_enter[csn] = self.env.now - patient.request_entry_ts[patient.current_stop_num]
         patient.current_unit_name = self.name
 
         # Update unit attributes
         self.num_entries += 1
         self.last_entry_ts = self.env.now
 
-        # Increment occupancy
+        # Increment occupancy in this unit
         self.inc_occ()
 
         # If this is first stop, decrement occupancy in Entry node
-        if current_stop_num == 1:
-            obsystem.entry.dec_occ()
+        if patient.current_stop_num == 1:
+            pfs.entry.dec_occ()
             previous_unit_name = None
-
-        # Check if we have a bed from a previous stay and release it if we do.
-        # Update stats for previous unit.
-        if patient.bed_requests[current_stop_num - 1] is not None:
-            patient.exit_ts[current_stop_num - 1] = self.env.now
-            patient.wait_to_exit[current_stop_num - 1] = \
-                self.env.now - patient.request_exit_ts[current_stop_num - 1]
-            previous_unit_name = patient.unit_stops[current_stop_num - 1]
-            previous_unit = obsystem.patient_care_units[previous_unit_name]
-            previous_request = patient.bed_requests[current_stop_num - 1]
-            # Release the previous bed
-            previous_unit.unit.release(previous_request)
+        else:
+            # Update stats for previous unit.
+            previous_request = patient.bed_requests[csn - 1]
+            previous_unit_name = patient.unit_stops[csn - 1]
+            previous_unit = pfs.patient_care_units[previous_unit_name]
+            patient.exit_ts[csn - 1] = self.env.now
+            patient.wait_to_exit[csn - 1] = \
+                self.env.now - patient.request_exit_ts[csn - 1]
             # Accumulate total time this unit occupied and other unit attributes
             previous_unit.tot_occ_time += \
-                self.env.now - patient.entry_ts[current_stop_num - 1]
+                self.env.now - patient.entry_ts[csn - 1]
             previous_unit.num_exits += 1
             previous_unit.last_exit_ts = self.env.now
             # Decrement occupancy in previous unit since bed now released
             previous_unit.dec_occ()
 
+            # Check if we have a bed from a previous stay and release it if we do.
+            if previous_request is not None:
+                # Release the previous bed
+                previous_unit.unit.release(previous_request)
+
+
         logging.debug(f"{self.env.now:.4f}: {patient.patient_id} entering {self.name}")
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} waited {self.env.now - bed_request_ts:.4f} time units for {self.name} bed")
 
-        # Generate los
+        # Generate los for this unit stay. Previous bed (if any) has been released.
         # TODO: Modeling discharge timing
+        # TODO: Move LOS related code to separate method
         los = patient.route_graph.nodes(data=True)[patient.current_unit_name]['planned_los']
         patient.planned_los[patient.current_stop_num] = los
 
         # Do any blocking related los adjustments.
-        if previous_unit_name is not None and current_stop_num > 1:
+        if previous_unit_name is not None and patient.current_stop_num > 1:
             G = patient.route_graph
             los_adjustment_type = G[previous_unit_name][self.name]['blocking_adjustment']
             if los_adjustment_type == 'delay':
-                adj_los = max(0, los - patient.wait_to_exit[current_stop_num - 1])
+                adj_los = max(0, los - patient.wait_to_exit[patient.current_stop_num - 1])
             else:
                 adj_los = los
         else:
             adj_los = los
 
-        patient.adjusted_los[current_stop_num] = adj_los
+        patient.adjusted_los[patient.current_stop_num] = adj_los
+        ####################################################################################33
 
         # Wait for LOS to elapse
         yield self.env.timeout(adj_los)
 
         # Determine next stop in route
-        next_unit_name = patient.patient_flow_system.router.get_next_stop(patient)
+        next_unit_name = patient.pfs.router.get_next_stop(patient)
 
-        if next_unit_name is not None:
+        # TODO: needs review
+        if next_unit_name != UnitName.EXIT:
             # Try to get bed in next unit
-            self.env.process(obsystem.patient_care_units[next_unit_name].put(patient, obsystem))
+            self.env.process(pfs.patient_care_units[next_unit_name].put(patient, pfs))
         else:
             # Patient is ready to exit system
 
             # Release the bed
-            self.unit.release(patient.bed_requests[current_stop_num])
+            self.unit.release(patient.bed_requests[patient.current_stop_num])
             # Accumulate total time this unit occupied and other unit attributes
             self.tot_occ_time += \
-                self.env.now - patient.entry_ts[current_stop_num]
+                self.env.now - patient.entry_ts[patient.current_stop_num]
             self.num_exits += 1
             self.last_exit_ts = self.env.now
 
             # Decrement occupancy in this unit since bed now released
             self.dec_occ()
 
-            patient.request_exit_ts[current_stop_num] = self.env.now
-            patient.exit_ts[current_stop_num] = self.env.now
+            patient.request_exit_ts[patient.current_stop_num] = self.env.now
+            patient.exit_ts[patient.current_stop_num] = self.env.now
 
             # Send patient to Exit node
-            obsystem.exit.put(patient, obsystem)
+            pfs.exit.put(patient, pfs)
 
     def get_length_of_stay(self, patient, previous_unit_name):
+        pass
 
     def inc_occ(self, increment=1):
         """Update occupancy - increment by 1"""
@@ -713,7 +747,7 @@ class PatientPoissonArrivals:
         patient_flow_system : PatientFlowSystem into which the arrival is inserted
             This allows us to kick off a patient flowing through the system
 
-        TODO: Decouple the PP generator from the actual creation of model specific entities
+        # TODO: Decouple the PP generator from the actual creation of model specific entities
     """
 
     def __init__(self, env, arrival_stream_uid: ArrivalType, arrival_rate: float, arrival_stream_rg,
