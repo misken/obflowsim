@@ -245,14 +245,14 @@ class StaticRouter(Router):
 
         self.env = env
         self.patient_flow_system = patient_flow_system
-        self.routes = patient_flow_system.config.routes
-        self.los_distributions = patient_flow_system.config.los_distributions
+        #self.routes = patient_flow_system.config.routes
+        #self.los_distributions = patient_flow_system.config.los_distributions
 
         # Dict of networkx DiGraph objects
         self.route_graphs = {}
 
         # Create route templates from routes list (of unit numbers)
-        for route_name, route in self.routes.items():
+        for route_name, route in self.patient_flow_system.config.routes.items():
             route_graph = nx.DiGraph()
 
             # Add edges - simple serial route in this case
@@ -323,7 +323,8 @@ class StaticRouter(Router):
             if unit == UnitName.ENTRY or unit == UnitName.EXIT:
                 route_graph.nodes[unit]['planned_los'] = 0.0
             else:
-                route_graph.nodes[unit]['planned_los'] = self.los_distributions[patient.patient_type][unit]()
+                route_graph.nodes[unit]['planned_los'] = \
+                    self.patient_flow_system.config.los_distributions[patient.patient_type][unit]()
 
         return route_graph
 
@@ -657,6 +658,8 @@ class PatientCareUnit:
 
             # Send patient to Exit node
             obsystem.exit.put(patient, obsystem)
+
+    def get_length_of_stay(self, patient, previous_unit_name):
 
     def inc_occ(self, increment=1):
         """Update occupancy - increment by 1"""

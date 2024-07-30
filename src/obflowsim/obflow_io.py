@@ -152,6 +152,27 @@ def process_schedule_file(sched_file: str | Path, start_date: Timestamp, base_ti
     return new_sched_lines
 
 
+def process_discharge_pattern_file(discharge_file: str | Path):
+    """
+
+    Parameters
+    ----------
+    discharge_file
+
+    Returns
+    -------
+
+    """
+
+    with open(discharge_file, 'r') as f:
+        discharge_lines = [line.strip().split() for line in f.readlines() if len(line.strip()) > 0]
+
+    bins = np.array([int(x) for x in list(zip(*discharge_lines))[0]])
+    cdf = np.array([float(x) for x in list(zip(*discharge_lines))[1]])
+
+    return bins, cdf
+
+
 def setup_output_paths(config, rep_num):
     stats = config.output.keys()
     config.paths = {stat: None for stat in stats}

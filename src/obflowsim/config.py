@@ -129,6 +129,15 @@ class Config:
 
         self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
 
+        # Discharge patterns
+        try:
+            self.discharge_pattern_file = config_dict['discharge_pattern_file']
+            self.discharge_pattern = obio.process_discharge_pattern_file(self.discharge_pattern_file)
+        except KeyError:
+            self.discharge_pattern_file = None
+            self.discharge_pattern = None
+
+
         # Branching probabilities
         self.branching_probabilities = config_dict['branching_probabilities']
 

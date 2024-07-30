@@ -62,6 +62,9 @@ branching_probabilities:
     pct_aug_labor_to_c: 0.06
     pct_sched_ind_to_c: 0.12
     pct_urg_ind_to_c: 0.12
+    
+# Comment out following line if you don't want to use time of day discharge patterns
+discharge_pattern_file: ./input/discharge_cdf.txt
 
 # You can define input parameters to be used on los_distributions section
 los_params:
@@ -86,37 +89,31 @@ los_distributions:
     RAND_SPONT_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
     RAND_SPONT_CSECT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     RAND_AUG_REG:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
     RAND_AUG_CSECT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     SCHED_CSECT:
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
     SCHED_IND_REG:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4], p=[0.1, 0.6, 0.2, 0.1])
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
     SCHED_IND_CSECT:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  # For PP, the choice values are in days
-        PP:  choice([1, 2, 3, 4, 5], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
     RAND_NONDELIV_LDR:
         LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
     RAND_NONDELIV_PP:
