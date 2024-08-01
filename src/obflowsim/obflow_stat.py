@@ -28,6 +28,7 @@ from typing import (
 )
 
 from obflowsim.obflow_sim import PatientFlowSystem
+from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
 
 
 class PatientTypeSummary():
@@ -39,8 +40,8 @@ class PatientTypeSummary():
 
     def __init__(self):
 
-        self.num_exits = Counter({i.name: 0 for i in PatientType})
-        self.tot_patient_hours = {i.name: 0.0 for i in PatientType}
+        self.num_exits = Counter({i: 0 for i in PatientType})
+        self.tot_patient_time_in_system = {i: 0.0 for i in PatientType}
 
 
 def mean_from_dist_params(dist_name: str, params: Tuple, kwparams):
@@ -103,7 +104,7 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     warmup_time = obsystem.config.warmup_time
 
     # Compute static loads
-    load_unit, load_unit_ptype, unit_rho = obq.static_load_analysis(obsystem.config)
+    load_unit, load_unit_ptype, unit_rho, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem.config)
 
     for unit_name, unit in obsystem.patient_care_units.items():
         # Only compute if at least onc change in occupancy during simulation
@@ -556,7 +557,7 @@ def varsum(df, unit, pm, alpha):
     return pm_varsum_df
 
 
-def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warmup=0):
+def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, warmup=0):
     """
     Creates and writes out patient stop summary by scenario and replication to csv
 
@@ -572,7 +573,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
 
     start_analysis = warmup
     end_analysis = run_time
-    num_days = (run_time - warmup) / 24.0
+    num_days = (run_time - warmup) / BASE_TIME_UNITS_PER_DAY[obsystem.config.base_time_unit]
 
     results = []
     active_units = []
@@ -583,6 +584,7 @@ def process_stop_log(scenario, rep_num, obsystem, occ_stats_path, run_time, warm
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
 
     stops_df = stops_df[(stops_df['entry_ts'] <= end_analysis) & (stops_df['exit_ts'] >= start_analysis)]
+    stops_df = stops_df[(stops_df['unit'] != UnitName.ENTRY) & (stops_df['unit'] != UnitName.EXIT)]
 
     # LOS means and sds - planned and actual
     stops_df_grp_unit = stops_df.groupby(['unit'])

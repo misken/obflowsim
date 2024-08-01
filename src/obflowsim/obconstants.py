@@ -1,5 +1,19 @@
-#from enum import StrEnum
 from enum import Enum, StrEnum
+import simpy
+
+DEFAULT_BASE_TIME_UNIT = 'h'
+DEFAULT_START_DATE = '2024-01-01'
+DEFAULT_USE_CALENDAR_TIME = 1
+DEFAULT_RUN_TIME = simpy.core.Infinity
+DEFAULT_MAX_ARRIVALS = simpy.core.Infinity
+DEFAULT_WARMUP_TIME = 0
+DEFAULT_NUM_REPLICATIONS = 1
+
+ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform', 'choice']
+
+BASE_TIME_UNITS_PER_YEAR = {'h': 24 * 365, 'm': 1440 * 365}
+BASE_TIME_UNITS_PER_DAY = {'h': 24, 'm': 1440}
+
 
 class PatientType(StrEnum):
     """
@@ -18,8 +32,6 @@ class PatientType(StrEnum):
 
     # Type 10: random arrival, non-delivered LD, route = 1
     # Type 11: random arrival, non-delivered PP route = 4
-
-    TODO - Python 3.11 has strEnum
     """
     RAND_SPONT_REG = 'RAND_SPONT_REG'
     RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
@@ -36,7 +48,7 @@ class PatientType(StrEnum):
 
 class ArrivalType(StrEnum):
     """
-
+    There are six distinct arrival streams of patients.
     """
     SPONT_LABOR = 'spont_labor'
     URGENT_INDUCED_LABOR = 'urgent_induced_labor'
@@ -47,11 +59,14 @@ class ArrivalType(StrEnum):
 
 
 class PatientTypeArrivalType:
+    """
+    Mapping of patient types to arrival streams
+    """
     pat_type_to_arrival_type = {
         PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR,
         PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR,
         PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR,
-        PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_AUG_CSECT.value: ArrivalType.SPONT_LABOR,
         PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR,
         PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR,
         PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT,
@@ -61,9 +76,10 @@ class PatientTypeArrivalType:
         PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP,
     }
 
+
 class UnitName(StrEnum):
     """
-
+    Each `PatientCareUnit` object should have one of these for its `name` property.
     """
     ENTRY = 'ENTRY'
     EXIT = 'EXIT'
@@ -74,15 +90,3 @@ class UnitName(StrEnum):
     LDRP = 'LDRP'
     LD = 'LD'
     RECOVERY = 'R'
-
-# TODO: Why is this commented out?
-# class OBunitId(IntEnum):
-#     ENTRY = 0
-#     OBS = 1
-#     LDR = 2
-#     CSECT = 3
-#     PP = 4
-#     LDRP = 5
-#     LD = 6
-#     RECOVERY = 8
-#     EXIT = 8

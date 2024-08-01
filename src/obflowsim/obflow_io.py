@@ -30,7 +30,7 @@ from typing import (
 )
 
 import obflowsim.obflow_stat as obstat
-import obflowsim.constants as obconstants
+import obflowsim.obconstants as obconstants
 
 
 def load_config(cfg):

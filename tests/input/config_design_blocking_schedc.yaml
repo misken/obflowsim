@@ -2,7 +2,7 @@ scenario: test_blocking_schedc
 
 run_settings:
   num_replications: 2
-  run_time: 7200
+  run_time: 9960
   warmup_time: 1200
   
   # Uncomment the following to use max_arrivals as additional or alternate stopping condition
@@ -42,7 +42,7 @@ rand_arrival_rates:
 # 1=on, 0=off    
 rand_arrival_toggles:
     spont_labor: 1
-    urgent_induced_labor: 1
+    urgent_induced_labor: 0
     non_delivery_ldr: 1
     non_delivery_pp: 1
 
@@ -58,7 +58,7 @@ sched_arrival_toggles:
 
 branching_probabilities:
     pct_spont_labor_aug: 0.4
-    pct_spont_labor_to_c: 0.4
+    pct_spont_labor_to_c: 0.2
     pct_aug_labor_to_c: 0.06
     pct_sched_ind_to_c: 0.12
     pct_urg_ind_to_c: 0.12
@@ -111,6 +111,15 @@ los_distributions:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
     SCHED_IND_CSECT:
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    URGENT_IND_REG:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    URGENT_IND_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])

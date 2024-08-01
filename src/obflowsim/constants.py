@@ -9,3 +9,5 @@ DEFAULT_WARMUP_TIME = 0
 DEFAULT_NUM_REPLICATIONS = 1
 
 ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform', 'choice']
+
+BASE_TIME_UNITS_PER_YEAR = {'h': 24 * 365, 'm': 1440 * 365}

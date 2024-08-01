@@ -11,7 +11,7 @@ from typing import (
 
 import simpy.core
 
-import obflowsim.constants as obconstants
+import obflowsim.obconstants as obconstants
 import obflowsim.obflow_io as obio
 
 
