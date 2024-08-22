@@ -5,7 +5,7 @@ import networkx as nx
 
 from obflowsim.config import Config
 from obflowsim.obconstants import PatientType
-from obflowsim.constants import BASE_TIME_UNITS_PER_YEAR
+from obflowsim.obconstants import BASE_TIME_UNITS_PER_YEAR
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def spont_labor_subrates(config: Config):
     pct_aug_labor_to_c = config.branching_probabilities['pct_aug_labor_to_c']
 
     # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
-    spont_labor_subrate[PatientType.RAND_SPONT_REG.value] = \
+    spont_labor_subrate[PatientType.RAND_SPONT_NAT.value] = \
         (1 - pct_spont_labor_aug) * (1 - pct_spont_labor_to_c) * spont_labor_rate
 
     # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
@@ -70,7 +70,7 @@ def spont_labor_subrates(config: Config):
         (1 - pct_spont_labor_aug) * pct_spont_labor_to_c * spont_labor_rate
 
     # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
-    spont_labor_subrate[PatientType.RAND_AUG_REG.value] = \
+    spont_labor_subrate[PatientType.RAND_AUG_NAT.value] = \
         pct_spont_labor_aug * (1 - pct_aug_labor_to_c) * spont_labor_rate
 
     # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
@@ -109,7 +109,7 @@ def urgent_induction_subrates(config: Config):
     pct_urgent_induction_to_c = config.branching_probabilities['pct_urg_ind_to_c']
 
     # Type 8: urgent induction, regular delivery, route = 1-2-4
-    urgent_induction_subrate[PatientType.URGENT_IND_REG.value] = \
+    urgent_induction_subrate[PatientType.URGENT_IND_NAT.value] = \
         (1 - pct_urgent_induction_to_c) * urgent_induction_rate
 
     # Type 9: urgent induction, C-section delivery, route = 1-3-2-4
@@ -152,7 +152,7 @@ def scheduled_subrates(config: Config):
     else:
         tot_scheduled_induction_rate = 0.0
 
-    scheduled_subrate[PatientType.SCHED_IND_REG.value] = \
+    scheduled_subrate[PatientType.SCHED_IND_NAT.value] = \
         (1 - pct_sched_ind_to_c) * tot_scheduled_induction_rate
 
     scheduled_subrate[PatientType.SCHED_IND_CSECT.value] = \
@@ -223,10 +223,10 @@ def static_load_analysis(config: Config):
     for pat_type, arr_rate in arrival_rates_pattype.items():
         annual_volume_ptype[pat_type] = arr_rate * BASE_TIME_UNITS_PER_YEAR[config.base_time_unit]
 
-    annual_volume['reg_births'] = annual_volume_ptype['RAND_SPONT_REG'] + \
-                                  annual_volume_ptype['RAND_AUG_REG'] + \
-                                  annual_volume_ptype['SCHED_IND_REG'] + \
-                                  annual_volume_ptype['URGENT_IND_REG']
+    annual_volume['reg_births'] = annual_volume_ptype['RAND_SPONT_NAT'] + \
+                                  annual_volume_ptype['RAND_AUG_NAT'] + \
+                                  annual_volume_ptype['SCHED_IND_NAT'] + \
+                                  annual_volume_ptype['URGENT_IND_NAT']
 
     annual_volume['csect_births'] = annual_volume_ptype['RAND_SPONT_CSECT'] + \
                                     annual_volume_ptype['RAND_AUG_CSECT'] + \

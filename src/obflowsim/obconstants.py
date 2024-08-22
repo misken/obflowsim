@@ -19,28 +19,28 @@ class PatientType(StrEnum):
     """
     # Patient Type and Patient Flow Definitions
 
-    # Type 1: random arrival spont labor, regular delivery, route = 1-2-4
+    # Type 1: random arrival spont labor, natural delivery, route = 1-2-4
     # Type 2: random arrival spont labor, C-section delivery, route = 1-3-2-4
-    # Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
+    # Type 3: random arrival augmented labor, natural delivery, route = 1-2-4
     # Type 4: random arrival augmented labor, C-section delivery, route = 1-3-2-4
-    # Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
+    # Type 5: sched arrival induced labor, natural delivery, route = 1-2-4
     # Type 6: sched arrival induced labor, C-section delivery, route = 1-3-2-4
     # Type 7: sched arrival, C-section delivery, route = 1-3-2-4
 
-    # Type 8: urgent induced arrival, regular delivery, route = 1-2-4
+    # Type 8: urgent induced arrival, natural delivery, route = 1-2-4
     # Type 9: urgent induced arrival, C-section delivery, route = 1-3-2-4
 
     # Type 10: random arrival, non-delivered LD, route = 1
     # Type 11: random arrival, non-delivered PP route = 4
     """
-    RAND_SPONT_REG = 'RAND_SPONT_REG'
+    RAND_SPONT_NAT = 'RAND_SPONT_NAT'
     RAND_SPONT_CSECT = 'RAND_SPONT_CSECT'
-    RAND_AUG_REG = 'RAND_AUG_REG'
+    RAND_AUG_NAT = 'RAND_AUG_NAT'
     RAND_AUG_CSECT = 'RAND_AUG_CSECT'
-    SCHED_IND_REG = 'SCHED_IND_REG'
+    SCHED_IND_NAT = 'SCHED_IND_NAT'
     SCHED_IND_CSECT = 'SCHED_IND_CSECT'
     SCHED_CSECT = 'SCHED_CSECT'
-    URGENT_IND_REG = 'URGENT_IND_REG'
+    URGENT_IND_NAT = 'URGENT_IND_NAT'
     URGENT_IND_CSECT = 'URGENT_IND_CSECT'
     RAND_NONDELIV_LDR = 'RAND_NONDELIV_LDR'
     RAND_NONDELIV_PP = 'RAND_NONDELIV_PP'
@@ -63,14 +63,14 @@ class PatientTypeArrivalType:
     Mapping of patient types to arrival streams
     """
     pat_type_to_arrival_type = {
-        PatientType.RAND_SPONT_REG.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_SPONT_NAT.value: ArrivalType.SPONT_LABOR,
         PatientType.RAND_SPONT_CSECT.value: ArrivalType.SPONT_LABOR,
-        PatientType.RAND_AUG_REG.value: ArrivalType.SPONT_LABOR,
+        PatientType.RAND_AUG_NAT.value: ArrivalType.SPONT_LABOR,
         PatientType.RAND_AUG_CSECT.value: ArrivalType.SPONT_LABOR,
-        PatientType.SCHED_IND_REG.value: ArrivalType.SCHED_INDUCED_LABOR,
+        PatientType.SCHED_IND_NAT.value: ArrivalType.SCHED_INDUCED_LABOR,
         PatientType.SCHED_IND_CSECT.value: ArrivalType.SCHED_INDUCED_LABOR,
         PatientType.SCHED_CSECT.value: ArrivalType.SCHED_CSECT,
-        PatientType.URGENT_IND_REG.value: ArrivalType.URGENT_INDUCED_LABOR,
+        PatientType.URGENT_IND_NAT.value: ArrivalType.URGENT_INDUCED_LABOR,
         PatientType.URGENT_IND_CSECT.value: ArrivalType.URGENT_INDUCED_LABOR,
         PatientType.RAND_NONDELIV_LDR.value: ArrivalType.NON_DELIVERY_LDR,
         PatientType.RAND_NONDELIV_PP.value: ArrivalType.NON_DELIVERY_PP,

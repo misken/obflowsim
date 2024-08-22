@@ -86,7 +86,7 @@ los_params:
 # constants that are user defined parameters in the los_params section. 
 #  
 los_distributions:
-    RAND_SPONT_REG:
+    RAND_SPONT_NAT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
@@ -95,7 +95,7 @@ los_distributions:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    RAND_AUG_REG:
+    RAND_AUG_NAT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
@@ -107,14 +107,14 @@ los_distributions:
     SCHED_CSECT:
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
-    SCHED_IND_REG:
+    SCHED_IND_NAT:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
     SCHED_IND_CSECT:
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
         PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    URGENT_IND_REG:
+    URGENT_IND_NAT:
         OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
         LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
         PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
@@ -146,7 +146,7 @@ random_number_streams:
   
   
 routes:
-  RAND_SPONT_REG:
+  RAND_SPONT_NAT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
@@ -179,7 +179,7 @@ routes:
     - id: PP_EXIT
       from: PP
       to: EXIT
-  RAND_AUG_REG:
+  RAND_AUG_NAT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
@@ -223,7 +223,7 @@ routes:
     - id: PP_EXIT
       from: PP
       to: EXIT
-  SCHED_IND_REG:
+  SCHED_IND_NAT:
     edges:
     - id: ENTRY_LDR
       from: ENTRY

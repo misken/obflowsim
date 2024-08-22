@@ -10,22 +10,8 @@ import pandas as pd
 from statsmodels.stats.weightstats import DescrStatsW
 from scipy.stats import t
 
-from obflowsim.obconstants import ArrivalType, PatientType, UnitName
+from obflowsim.obconstants import PatientType, UnitName
 import obflow_qng as obq
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    Iterator,
-    List,
-    NewType,
-    Optional,
-    Tuple,
-)
 
 from obflowsim.obflow_sim import PatientFlowSystem
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
@@ -35,54 +21,68 @@ class PatientTypeSummary():
     """
     Stores counts and accumulated length of stay by patient type
 
-    TODO: finish this
+    Printing an instance reports number of exits and ALOS by patient type.
     """
 
     def __init__(self):
 
         self.num_exits = Counter({i: 0 for i in PatientType})
         self.tot_patient_time_in_system = {i: 0.0 for i in PatientType}
+        self.alos = {i: 0.0 for i in PatientType}
+
+    def __str__(self):
+        self.compute_alos()
+        exits_summary = f'\n{"Number of exits and ALOS":40}\n'
+        exits_summary += f'{40 * "-"}\n'
+        header = f'{"patient_type":20}{"exits":>7}{"ALOS":>10}\n'
+        exits_summary += header
+        for pt, num_exits in self.num_exits.items():
+            exits_summary += f'{pt.value:20}{num_exits:7}'
+            exits_summary += f'{self.alos[pt]:10.1f}\n'
+
+        return exits_summary
+
+    def compute_alos(self):
+        for i in PatientType:
+            if self.num_exits[i] > 0:
+                self.alos[i] = self.tot_patient_time_in_system[i] / self.num_exits[i]
+            else:
+                self.alos[i] = 0.0
 
 
-def mean_from_dist_params(dist_name: str, params: Tuple, kwparams):
-    """
-    Compute mean from distribution name and parameters - numpy based
+class DeliverySummary():
 
-    Parameters
-    ----------
-    dist_name
-    params
+    def __init__(self, scenario: str, rep_num: int, pts: PatientTypeSummary):
+        self.scenario = scenario
+        self.rep_num = rep_num
+        self.patient_type_summary = pts
 
-    Returns
-    -------
+        self.tot_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
+                                   if 'NONDELIV' not in pt])
 
-    """
+        self.tot_nat_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
+                                       if 'NAT' in pt])
 
-    if dist_name == 'gamma':
-        _shape = params[0]
-        _scale = params[1]
-        _mean = _shape * _scale
-    elif dist_name == 'triangular':
-        _left = params[0]
-        _mode = params[1]
-        _right = params[2]
-        _mean = (_left + _mode + _right) / 3
-    elif dist_name == 'normal':
-        _mean = params[0]
-    elif dist_name == 'exponential':
-        _mean = params[0]
-    elif dist_name == 'uniform':
-        _left = params[0]
-        _right = params[1]
-        _mean = (_left + _right) / 2
-    elif dist_name == 'choice':
-        _a = params[0]
-        _p = kwparams['p']
-        _mean = sum(x * y for x, y in zip(_a, _p))
-    else:
-        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
+        self.tot_csect_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
+                                         if 'CSECT' in pt])
 
-    return _mean
+        assert (self.tot_deliveries == self.tot_nat_deliveries + self.tot_csect_deliveries)
+
+        self.pct_csect = self.tot_csect_deliveries / self.tot_deliveries
+
+        self.tot_non_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
+                                      if 'NAT' not in pt and 'CSECT' not in pt])
+
+    def __str__(self):
+        delivery_summary = output_header("Delivery summary", 60, self.scenario, self.rep_num)
+
+        delivery_summary += f'{"Total deliveries":25}{self.tot_deliveries:7}\n\n'
+        delivery_summary += f'{"Natural deliveries":25}{self.tot_nat_deliveries:7}\n'
+        delivery_summary += f'{"C-section deliveries":25}{self.tot_csect_deliveries:7}\n'
+        delivery_summary += f'{"Pct C-section deliveries":25}{self.pct_csect:7.3f}\n\n'
+        delivery_summary += f'{"Total non-deliveries":25}{self.tot_non_deliveries:7}\n\n'
+
+        return delivery_summary
 
 
 def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)):
@@ -232,7 +232,7 @@ def process_obsim_logs(stop_log_path, occ_stats_path, output_path,
         stops_df = pd.read_csv(log_fn)
 
         stops_df = stops_df[(stops_df['entry_ts'] <= end_analysis) & (stops_df['exit_ts'] >= start_analysis) & \
-                   (stops_df['entry_ts'] < stops_df['exit_ts'])]
+                            (stops_df['entry_ts'] < stops_df['exit_ts'])]
 
         # LOS means and sds - planned and actual
         stops_df_grp_unit = stops_df.groupby(['unit'])
@@ -257,7 +257,7 @@ def process_obsim_logs(stop_log_path, occ_stats_path, output_path,
 
         newrec['rep'] = rep_num
         newrec['num_days'] = num_days
-        
+
         # Number of visits to each unit
         units = grp_all.groups.keys()
         for unit in units:
@@ -266,7 +266,7 @@ def process_obsim_logs(stop_log_path, occ_stats_path, output_path,
             else:
                 newrec[f'num_visits_{unit.lower()}'] = 0
 
-            #newrec[f'num_visits_{unit.lower()}'] = stops_df_grp_unit['exit_ts'].count()[unit]
+            # newrec[f'num_visits_{unit.lower()}'] = stops_df_grp_unit['exit_ts'].count()[unit]
 
             # LOS stats for each unit
         for unit in units:
@@ -277,10 +277,10 @@ def process_obsim_logs(stop_log_path, occ_stats_path, output_path,
                 newrec[f'actual_los_mean_{unit.lower()}'] = actlos_mean[unit]
                 newrec[f'planned_los_sd_{unit.lower()}'] = plos_sd[unit]
                 newrec[f'actual_los_sd_{unit.lower()}'] = actlos_sd[unit]
-        
+
                 newrec[f'planned_los_cv2_{unit.lower()}'] = (plos_sd[unit] / plos_mean[unit]) ** 2
                 newrec[f'actual_los_cv2_{unit.lower()}'] = (actlos_sd[unit] / actlos_mean[unit]) ** 2
-        
+
                 newrec[f'planned_los_skew_{unit.lower()}'] = plos_skew[unit]
                 newrec[f'actual_los_skew_{unit.lower()}'] = actlos_skew[unit]
                 newrec[f'planned_los_kurt_{unit.lower()}'] = plos_kurt[unit]
@@ -353,12 +353,14 @@ def process_obsim_logs(stop_log_path, occ_stats_path, output_path,
     output_csv_file = output_path / f'{output_file_stem}.csv'
     scenario_rep_summary_df = scenario_rep_summary_df.sort_values(by=['scenario', 'rep'])
     scenario_rep_summary_df.to_csv(output_csv_file, index=False)
-    
+
     return active_units
 
 
-def output_header(msg, line_len, scenario, rep_num):
-    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n{'-' * line_len}\n"
+def output_header(msg, min_line_len, scenario, rep_num):
+    header = f"\n{msg} (scenario={scenario} rep={rep_num})\n"
+    line_len = max([len(header), min_line_len])
+    header += f"{'-' * line_len}\n"
     return header
 
 
@@ -384,7 +386,7 @@ def aggregate_over_reps(scen_rep_summary_path, active_units=('OBS', 'LDR', 'CSEC
             condp95time_blockedby_ldr=pd.NamedAgg(column='blockedby_ldr_p95', aggfunc='mean')
         )
         unit_dfs.append(output_stats_summary_agg_obs_df)
-        
+
     if 'LDR' in active_units:
         output_stats_summary_agg_ldr_df = output_stats_summary_df.groupby(['scenario']).agg(
             num_visits_ldr_mean=pd.NamedAgg(column='num_visits_ldr', aggfunc='mean'),
@@ -399,7 +401,7 @@ def aggregate_over_reps(scen_rep_summary_path, active_units=('OBS', 'LDR', 'CSEC
             condp95time_blockedby_pp=pd.NamedAgg(column='blockedby_pp_p95', aggfunc='mean')
         )
         unit_dfs.append(output_stats_summary_agg_ldr_df)
-        
+
     if 'CSECT' in active_units:
         output_stats_summary_agg_csect_df = output_stats_summary_df.groupby(['scenario']).agg(
             num_visits_csect_mean=pd.NamedAgg(column='num_visits_csect', aggfunc='mean'),
@@ -411,7 +413,7 @@ def aggregate_over_reps(scen_rep_summary_path, active_units=('OBS', 'LDR', 'CSEC
             occ_mean_p95_csect=pd.NamedAgg(column='occ_p95_csect', aggfunc='mean')
         )
         unit_dfs.append(output_stats_summary_agg_csect_df)
-        
+
     if 'PP' in active_units:
         output_stats_summary_agg_pp_df = output_stats_summary_df.groupby(['scenario']).agg(
             num_visits_pp_mean=pd.NamedAgg(column='num_visits_pp', aggfunc='mean'),
@@ -465,6 +467,7 @@ def create_sim_summaries(scenario_rep_simout_path, output_path, suffix,
                          active_units=('OBS', 'LDR', 'CSECT', 'PP')
                          ):
     """
+    Compute simulation output summaries aggregated over multiple replications.
 
     Parameters
     ----------
@@ -479,7 +482,7 @@ def create_sim_summaries(scenario_rep_simout_path, output_path, suffix,
     No return value
     """
     # Create output filename stems
-    #scenario_rep_simout_stem_ = f'scenario_rep_simout_{suffix}'
+    # scenario_rep_simout_stem_ = f'scenario_rep_simout_{suffix}'
     scenario_simout_stem = f'scenario_simout_{suffix}'
     scenario_siminout_stem = f'scenario_siminout_{suffix}'
     scenario_ci_stem = f'scenario_ci_{suffix}'
@@ -500,7 +503,6 @@ def create_sim_summaries(scenario_rep_simout_path, output_path, suffix,
 
     # Merge the scenario summary with the scenario inputs for both aggregated and raw stats
     if include_inputs:
-
         # Do merge and output for stats by scenario
         scenario_rep_siminout_stem = f'scenario_rep_siminout_{suffix}'
         scenario_simin_df = pd.read_csv(scenario_inputs_path)
@@ -578,7 +580,7 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
     results = []
     active_units = []
 
-    print(scenario, rep_num)
+    #print(scenario, rep_num)
 
     # Read the log file and filter by included categories
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
@@ -698,7 +700,7 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
 
     newrec['timestamp'] = str(datetime.now())
 
-    print(newrec)
+    #print(newrec)
     return newrec
 
     # results.append(newrec)
@@ -798,8 +800,8 @@ def main(argv=None):
         scenario_rep_summary_stem = f'scenario_rep_simout_{args.suffix}'
 
         active_units = process_obsim_logs(Path(args.stop_log_path), Path(args.occ_stats_path),
-                           Path(args.output_path), args.run_time, warmup=args.warmup_time,
-                           output_file_stem=scenario_rep_summary_stem)
+                                          Path(args.output_path), args.run_time, warmup=args.warmup_time,
+                                          output_file_stem=scenario_rep_summary_stem)
 
     # Create
     create_sim_summaries(Path(args.scenario_rep_simout_path),
@@ -812,4 +814,3 @@ def main(argv=None):
 
 if __name__ == '__main__':
     sys.exit(main())
-

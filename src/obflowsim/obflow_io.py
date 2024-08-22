@@ -29,6 +29,7 @@ from typing import (
     Tuple,
 )
 
+import obflowsim.config
 import obflowsim.obflow_stat as obstat
 import obflowsim.obconstants as obconstants
 
@@ -101,7 +102,7 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 args, kwargs = _convert_str_to_args_and_kwargs(raw_dist_str)
                 partial_dist_func = partial(eval(f'rg.{func_name}'), *args, **kwargs)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
-                los_means[key_pat_type][key_unit] = obstat.mean_from_dist_params(func_name, args, kwargs)
+                los_means[key_pat_type][key_unit] = obflowsim.config.mean_from_dist_params(func_name, args, kwargs)
             else:
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
@@ -282,7 +283,6 @@ def occ_stats_to_string(occ_stats_df, scenario, rep_num):
     pd.set_option('display.width', 1000)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.float_format', '{:.2f}'.format)
-    print(output_header("Occupancy stats", 130, scenario, rep_num))
     occ_stats_string = occ_stats_df.reset_index(drop=True).to_string(index=False)
     pd.reset_option('display.width')
     pd.reset_option('display.max_columns')

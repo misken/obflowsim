@@ -137,53 +137,53 @@ interested in TOD stats, need to implement TOD adjustment to model
 discharge timing.
 
 TJW - The best way to model PP LOS, if
- you ask me, is this:  -  patient arrives on PP
- whenever they get there on the first PP day  -
-  LOS in days is best modeled by a distribution of 1, 2 or 3
- days for vaginal or 2, 3, or 4 days for csec.
-    -  on the discharged day, the discharge
- time is selected from the appropriate LOS distribution for
- time of day.  It's the same no matter how many days the
- patient was on the PP unit.  So, interestingly
- enough, arriving early in the AM at PP actually increases
- LOS.  Arriving late, say 1800 or so, decreases overall PP
- LOS.  If you want to shorten PP LOS, the best thing to do
- is schedule procedures later in the afternoon and move the
- patient to PP between 1800 and 2100 in the evening.
- 
+ you ask me, is this:  -  patient arrives on PP
+ whenever they get there on the first PP day  -
+  LOS in days is best modeled by a distribution of 1, 2 or 3
+ days for vaginal or 2, 3, or 4 days for csec.
+    -  on the discharged day, the discharge
+ time is selected from the appropriate LOS distribution for
+ time of day.  It's the same no matter how many days the
+ patient was on the PP unit.  So, interestingly
+ enough, arriving early in the AM at PP actually increases
+ LOS.  Arriving late, say 1800 or so, decreases overall PP
+ LOS.  If you want to shorten PP LOS, the best thing to do
+ is schedule procedures later in the afternoon and move the
+ patient to PP between 1800 and 2100 in the evening.
+ 
 TJW - Labor LOS
- is very dependent on labor type  -  spontaneous
- labor, vaginal birth/csec  -  augmented labor,
- vaginal birth/csec  -  induced labor, vaginal
- birth/csec    -  -  should be a variable 10,
- 20, 30 and 40% of total birth vol    -  -
-  the non-induced patient volume should be split evenly
- between spontaneous and augmented labor    -
-  -  can have different probabilities for vag birth vs csec
- delivery for the three labor types aboveOf
- course, scheduled csec patients do not spend any time in
- labor.  Rather, these patients go straight to the pre-op
- area.  
- 
+is very dependent on labor type  -  spontaneous
+labor, vaginal birth/csec  -  augmented labor,
+vaginal birth/csec  -  induced labor, vaginal
+birth/csec    -  -  should be a variable 10,
+20, 30 and 40% of total birth vol    -  -
+the non-induced patient volume should be split evenly
+between spontaneous and augmented labor    -
+-  can have different probabilities for vag birth vs csec
+delivery for the three labor types aboveOf
+course, scheduled csec patients do not spend any time in
+labor.  Rather, these patients go straight to the pre-op
+area.
+ 
 TJW - 
- have a few very descriptive LOS distributions for each of
- the patient types noted in c aboveFor PP, there
- are only two patient types, vag birth and csec delivery. 
- PP LOS is independent on anything that happened in labor
- except how did the baby come out.  
- 
+have a few very descriptive LOS distributions for each of
+the patient types noted in c aboveFor PP, there
+are only two patient types, vag birth and csec delivery.
+PP LOS is independent on anything that happened in labor
+except how did the baby come out.
+ 
 TJW - Mark, the big problem these days is the
- exploding induction rates.  Induced patients have more than
- double the LDR LOS in labor.  This is primarily one-on-one
- nursing and LDR room consuming for an additional 11 or 12
- hours, on average.  So, induced patients consume LDR rooms
- and csec patients consume PP rooms.  Spontaneous labor,
- un-augmented labor, vaginal birth patients - the natural way
- - is far more efficient and frugal regarding resource
- consumption.  Induced labor that results in a csec is the
- most expensive patient type on the planet.  
+exploding induction rates.  Induced patients have more than
+double the LDR LOS in labor.  This is primarily one-on-one
+nursing and LDR room consuming for an additional 11 or 12
+hours, on average.  So, induced patients consume LDR rooms
+and csec patients consume PP rooms.  Spontaneous labor,
+un-augmented labor, vaginal birth patients - the natural way
+- is far more efficient and frugal regarding resource
+consumption.  Induced labor that results in a csec is the
+most expensive patient type on the planet.
 
-
+Dist fitting in Python - https://fitter.readthedocs.io/en/latest/
 
 Router design
 --------------
@@ -249,7 +249,8 @@ structlog is another option for structured logging (dicts instead of just string
     
 https://opentelemetry.io/docs/instrumentation/python/
 
-
+Statistical reporting
+-----------------------
 
 
 Staffing resources
