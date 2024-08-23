@@ -1,4 +1,4 @@
-from obflowsim import obflow_sim
+from obflowsim import simulate
 
 assert True
 #def test_runsim():

@@ -29,9 +29,9 @@ import networkx as nx
 from networkx import DiGraph
 # import json
 
-import obflowsim.obflow_io as obio
-import obflowsim.obflow_stat as obstat
-import obflowsim.obflow_qng as obq
+import obflowsim.io as obio
+import obflowsim.stats as obstat
+import obflowsim.obqueueing as obq
 from obflowsim.config import Config
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar

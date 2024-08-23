@@ -12,11 +12,11 @@ from statsmodels.stats.weightstats import DescrStatsW
 from scipy.stats import t
 
 from obflowsim.obconstants import PatientType, UnitName
-import obflow_qng as obq
+import obqueueing as obq
 
-from obflowsim.obflow_sim import PatientFlowSystem
+from obflowsim.simulate import PatientFlowSystem
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
-from obflowsim import obflow_io as obio
+from obflowsim import io as obio
 
 
 class ReportExitSummary:

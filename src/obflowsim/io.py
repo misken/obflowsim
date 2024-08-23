@@ -30,7 +30,7 @@ from typing import (
 )
 
 import obflowsim.config
-import obflowsim.obflow_stat as obstat
+import obflowsim.stats as obstat
 import obflowsim.obconstants as obconstants
 
 

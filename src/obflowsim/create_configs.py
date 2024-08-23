@@ -86,7 +86,7 @@ def create_configs_from_inputs_csv(exp, scenarios_csv_file_path, simulation_sett
             bat_file.write(run_line)
 
         # Create output file processing line
-        # output_proc_line = f'python obflow_stat.py {output_path_} {exp_suffix_} '
+        # output_proc_line = f'python stats.py {output_path_} {exp_suffix_} '
         # output_proc_line += f"--run_time {settings['run_settings']['run_time']} "
         # output_proc_line += f"--warmup_time {settings['run_settings']['warmup_time']} --include_inputs "
         # output_proc_line += f"--scenario_inputs_path {scenarios_csv_path_} --process_logs "

@@ -2,7 +2,7 @@ import pytest
 import simpy
 from numpy.random import default_rng
 
-import obflowsim.obflow_sim as obf
+import obflowsim.simulate as obf
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 
 

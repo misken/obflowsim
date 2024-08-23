@@ -12,7 +12,7 @@ from typing import (
 import simpy.core
 
 import obflowsim.obconstants as obconstants
-import obflowsim.obflow_io as obio
+import obflowsim.io as obio
 
 
 class ConfigError(Exception):
