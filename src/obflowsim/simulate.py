@@ -970,10 +970,6 @@ def simulate(config: Config, rep_num: int):
     occ_summary = obstat.ReportOccupancySummary(config.scenario, rep_num, occ_stats_df)
     print(occ_summary)
 
-    # Compute summary stats for this scenario replication
-    scenario_rep_summary_dict = obstat.create_stop_summary(
-        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
-
     # Write stats and log files
     if config.paths['occ_stats'] is not None:
         obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
@@ -985,14 +981,15 @@ def simulate(config: Config, rep_num: int):
         stop_log_df = pd.DataFrame(obsystem.stops_timestamps_list)
         # Convert timestamps to calendar time if needed
         if obsystem.sim_calendar.use_calendar_time:
-            stop_log_df['request_entry_ts'] = stop_log_df['request_entry_ts'].map(
-                lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
-            stop_log_df['entry_ts'] = stop_log_df['entry_ts'].map(
-                lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
-            stop_log_df['request_exit_ts'] = stop_log_df['request_exit_ts'].map(
-                lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
-            stop_log_df['exit_ts'] = stop_log_df['exit_ts'].map(lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
+            for field in ['request_entry_ts', 'entry_ts', 'request_exit_ts', 'exit_ts']:
+                stop_log_df[field] = stop_log_df[field].map(
+                    lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
+
         obio.write_log('stop_log', config.paths['stop_logs'], stop_log_df, config.scenario, rep_num)
+
+    # Compute summary stats for this scenario replication
+    scenario_rep_summary_dict = obstat.create_stop_summary(
+        config.scenario, rep_num, obsystem, config.paths['occ_stats'], config.run_time, config.warmup_time)
 
     return scenario_rep_summary_dict
 

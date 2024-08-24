@@ -3,14 +3,12 @@ import argparse
 from pathlib import Path
 from enum import IntEnum
 
+import numpy.random
 import pandas as pd
 from pandas import Timestamp
 import yaml
-import json
 
 import numpy as np
-from numpy.random import default_rng
-import numpy.random
 import json
 from functools import partial
 import copy
@@ -29,12 +27,12 @@ from typing import (
     Tuple,
 )
 
-import obflowsim.config
-import obflowsim.stats as obstat
+from obflowsim.config import Config, mean_from_dist_params
 import obflowsim.obconstants as obconstants
+from obflowsim.obconstants import UnitName
 
 
-def load_config(cfg):
+def load_config(cfg: str):
     """
     Load YAML configuration file
 
@@ -58,15 +56,15 @@ def _get_args_and_kwargs(*args, **kwargs):
     return args, kwargs
 
 
-def _convert_str_to_args_and_kwargs(s):
+def _convert_str_to_args_and_kwargs(s: str):
     return eval(s.replace(s[:s.find('(')], '_get_args_and_kwargs'))
 
 
-def _convert_str_to_func_name(s):
+def _convert_str_to_func_name(s: str):
     return s[:s.find('(')]
 
 
-def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
+def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg: numpy.random.Generator):
     """
 
     Parameters
@@ -102,7 +100,7 @@ def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg):
                 args, kwargs = _convert_str_to_args_and_kwargs(raw_dist_str)
                 partial_dist_func = partial(eval(f'rg.{func_name}'), *args, **kwargs)
                 los_dists_partials[key_pat_type][key_unit] = partial_dist_func
-                los_means[key_pat_type][key_unit] = obflowsim.config.mean_from_dist_params(func_name, args, kwargs)
+                los_means[key_pat_type][key_unit] = mean_from_dist_params(func_name, args, kwargs)
             else:
                 raise NameError(f"The use of '{func_name}' is not allowed")
 
@@ -174,25 +172,33 @@ def process_discharge_pattern_file(discharge_file: str | Path):
     return bins, cdf
 
 
-def setup_output_paths(config, rep_num):
-    stats = config.output.keys()
-    config.paths = {stat: None for stat in stats}
-    for stat in stats:
-        if config.output[stat]['write']:
-            Path(config.output[stat]['path']).mkdir(parents=True, exist_ok=True)
-            config.paths[stat] = Path(
-                config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
+# def setup_output_paths(config: Config, rep_num: int):
+#     stats = config.output.keys()
+#     config.paths = {stat: None for stat in stats}
+#     for stat in stats:
+#         if config.output[stat]['write']:
+#             Path(config.output[stat]['path']).mkdir(parents=True, exist_ok=True)
+#             config.paths[stat] = Path(
+#                 config.output[stat]['path']) / f"{stat}_scenario_{config.scenario}_rep_{rep_num}.csv"
+#
+#     return config
 
-    return config
 
-
-def write_log(which_log, log_path, df, scenario, rep_num, egress=True):
+def write_log(which_log: str,
+              log_path: str | Path,
+              df: pd.DataFrame,
+              scenario: str,
+              rep_num: int,
+              egress: bool = True):
     """
 
     Parameters
     ----------
-    csv_path
-    obsystem
+    which_log
+    log_path
+    df
+    scenario
+    rep_num
     egress
 
     Returns
@@ -204,12 +210,12 @@ def write_log(which_log, log_path, df, scenario, rep_num, egress=True):
     if egress:
         df.to_csv(csv_path, index=False)
     else:
-        df[(df['unit'] != 'ENTRY') & (df['unit'] != 'EXIT')].to_csv(csv_path, index=False)
+        df[(df['unit'] != UnitName.ENTRY) & (df['unit'] != UnitName.EXIT)].to_csv(csv_path, index=False)
 
 
-def concat_stop_summaries(stop_summaries_path, output_path,
-                          summary_stats_file_stem='summary_stats_scenario',
-                          output_file_stem=f'scenario_rep_simout'):
+def concat_stop_summaries(stop_summaries_path: str | Path, output_path: str | Path,
+                          summary_stats_file_stem: str = 'summary_stats_scenario',
+                          output_file_stem: str = 'scenario_rep_simout'):
     """
     Creates and writes out summary by scenario and replication to csv
 
