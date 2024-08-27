@@ -54,7 +54,7 @@ class ReportPatientTypeSummary:
 
     def __str__(self):
         self.compute_alos()
-        exits_summary = f'\n{"Number of exits and ALOS":40}\n'
+        exits_summary = f'\n{"Number of exits and ALOS (includes exits during warmup)":40}\n'
         exits_summary += f'{40 * "-"}\n'
         header = f'{"patient_type":20}{"exits":>7}{"ALOS":>10}\n'
         exits_summary += header
@@ -83,7 +83,7 @@ class ReportDeliverySummary:
         self.patient_type_summary = pts
 
         self.tot_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
-                                   if 'NONDELIV' not in pt])
+                                   if 'NAT' in pt or 'CSECT' in pt])
 
         self.tot_nat_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
                                        if 'NAT' in pt])
@@ -180,10 +180,12 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     Parameters
     ----------
     obsystem : PatientFlowSystem
-    quantiles : tuple, qauntiles to compute
+    quantiles : tuple, quantiles to compute
 
     Returns
     -------
+    occ_stats_df : DataFrame of occupancy statistics by unit
+    occ_df : DataFrame of detailed occupancy changes for each unit
 
     """
     occ_stats_dfs = []
@@ -234,6 +236,7 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     # Combine unit specific occupancy stats
     occ_stats_df = pd.concat(occ_stats_dfs)
     occ_df = pd.concat(occ_dfs)
+    occ_stats_df.set_index(['unit'], inplace=True)
 
     return occ_stats_df, occ_df
 
@@ -647,12 +650,21 @@ def varsum(df, unit, pm, alpha):
     return pm_varsum_df
 
 
-def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, warmup=0):
+def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
+                       occ_stats_df: pd.DataFrame | Path, run_time: float, warmup: float = 0):
+
+
     """
-    Creates and writes out patient stop summary by scenario and replication to csv
+    Creates replication summary dictionary
 
     Parameters
     ----------
+    scenario
+    rep_num
+    obsystem
+    occ_stats_path
+    run_time
+    warmup
 
 
     Returns
@@ -668,13 +680,36 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
     results = []
     active_units = []
 
-    # print(scenario, rep_num)
-
-    # Read the log file and filter by included categories
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
+    # Create visit level df
+    stops_df_entry = stops_df[(stops_df['unit'] == UnitName.ENTRY)]
+    # For system entry we need request_exit_ts from ENTRY to handle scheduled patients who all get held in ENTRY
+    stops_df_entry = stops_df_entry[['patient_id', 'patient_type', 'arrival_type', 'request_exit_ts']]
+    stops_df_entry.rename(columns={'request_exit_ts': 'system_entry_ts'}, inplace=True)
+    stops_df_exit = stops_df[(stops_df['unit'] == UnitName.EXIT)]
+    stops_df_exit = stops_df_exit[['patient_id', 'patient_type', 'arrival_type', 'exit_ts']]
+    stops_df_exit.rename(columns={'exit_ts': 'system_exit_ts'}, inplace=True)
+    visits_df = stops_df_entry.merge(stops_df_exit)
 
-    stops_df = stops_df[(stops_df['entry_ts'] <= end_analysis) & (stops_df['exit_ts'] >= start_analysis)]
+    # Filter out patient stops during the warmup period
+    stops_df = stops_df[(stops_df['entry_ts'] >= start_analysis) ]
+    visits_df = visits_df[(visits_df['system_entry_ts'] >= start_analysis)]
+
+    # Filter the entry and exit stops out of stops_df
     stops_df = stops_df[(stops_df['unit'] != UnitName.ENTRY) & (stops_df['unit'] != UnitName.EXIT)]
+
+    # Compute visit stats
+    visits_df['total_time_in_system'] = visits_df['system_exit_ts'] - visits_df['system_entry_ts']
+    visits_df['delivery'] = visits_df['patient_type'].map(lambda x: 'NAT' in x or 'CSECT' in x)
+    visits_df['csect_delivery'] = visits_df['patient_type'].map(lambda x: 'CSECT' in x)
+    visits_df['nat_delivery'] = visits_df['patient_type'].map(lambda x: 'NAT' in x)
+
+    # Delivery summary
+    tot_deliveries = visits_df['delivery'].sum()
+    tot_nat_deliveries = visits_df['nat_delivery'].sum()
+    tot_csect_deliveries = visits_df['csect_delivery'].sum()
+    assert (tot_deliveries == tot_nat_deliveries + tot_csect_deliveries)
+    pct_csect = tot_csect_deliveries / tot_deliveries
 
     # LOS means and sds - planned and actual
     stops_df_grp_unit = stops_df.groupby(['unit'])
@@ -688,11 +723,12 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
     actlos_skew = stops_df_grp_unit['exit_enter'].skew()
     # actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
 
-    grp_all = stops_df.groupby(['unit'])
-    grp_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
+    grp_unit = stops_df.groupby(['unit'])
+    grp_pattype_unit = stops_df.groupby(['patient_type', 'unit'])
+    grp_unit_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
 
-    blocked_uncond_stats = grp_all['entry_tryentry'].apply(get_stats, 'delay_')
-    blocked_cond_stats = grp_blocked['entry_tryentry'].apply(get_stats, 'delay_')
+    blocked_uncond_stats = grp_unit['entry_tryentry'].apply(get_stats, 'delay_')
+    blocked_cond_stats = grp_unit_blocked['entry_tryentry'].apply(get_stats, 'delay_')
 
     # Create new summary record as dict
     newrec = {'scenario': scenario}
@@ -700,8 +736,14 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
     newrec['rep'] = rep_num
     newrec['num_days'] = num_days
 
+    # Delivery summary
+    newrec['tot_deliveries'] = tot_deliveries
+    newrec['tot_nat_deliveries'] = tot_nat_deliveries
+    newrec['tot_csect_deliveries'] = tot_csect_deliveries
+    newrec['pct_csect'] = pct_csect
+
     # Number of visits to each unit
-    units = grp_all.groups.keys()
+    units = grp_unit.groups.keys()
     for unit in units:
         # if (unit, 'delay_count') in blocked_uncond_stats.index:
         #     newrec[f'num_visits_{unit.lower()}'] = blocked_uncond_stats[(unit, 'delay_count')]
@@ -749,8 +791,6 @@ def create_stop_summary(scenario, rep_num, obsystem, occ_stats_path, run_time, w
             # newrec[f'iatime_kurt_{unit.lower()}'] = iatimes_unit.kurtosis()
 
     # Get occ from occ stats summaries
-    occ_stats_fn = Path(occ_stats_path) / f"occ_stats_scenario_{scenario}_rep_{rep_num}.csv"
-    occ_stats_df = pd.read_csv(occ_stats_fn, index_col=0)
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
             newrec[f'occ_mean_{unit.lower()}'] = occ_stats_df.loc[unit]['mean_occ']

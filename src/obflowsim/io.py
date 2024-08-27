@@ -242,14 +242,19 @@ def concat_stop_summaries(stop_summaries_path: str | Path, output_path: str | Pa
     print(f'Scenario replication csv file written to {output_csv_file}')
 
 
-def write_stats(which_stats, stats_path, stats_df, scenario, rep_num):
+def write_stats(which_stats: str, stats_path: str | Path, stats_df: pd.DataFrame, scenario: str, rep_num: int):
     """
-    Export occupancy stats to csv
+    Export occupancy stats to csv for a specific replication within a specific scenario.
 
     Parameters
     ----------
-    occ_stats_path
-    occ_stats_df
+
+    which_stats
+    stats_path
+    stats_df
+    scenario
+    rep_num
+
 
     Returns
     -------
@@ -289,7 +294,7 @@ def occ_stats_to_string(occ_stats_df, scenario, rep_num):
     pd.set_option('display.width', 1000)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.float_format', '{:.2f}'.format)
-    occ_stats_string = occ_stats_df.reset_index(drop=True).to_string(index=False)
+    occ_stats_string = occ_stats_df.to_string(index=True)
     pd.reset_option('display.width')
     pd.reset_option('display.max_columns')
     pd.reset_option('display.float_format')
