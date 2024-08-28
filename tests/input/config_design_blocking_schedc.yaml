@@ -28,6 +28,9 @@ outputs:
   stop_logs:
     path: ./output/logs
     write: 1
+  visit_logs:
+    path: ./output/logs
+    write: 1
   summary_stats:
     path: ./output/stats
     write: 1

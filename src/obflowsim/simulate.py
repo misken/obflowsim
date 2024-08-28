@@ -67,9 +67,6 @@ class PatientFlowSystem:
         # Create list to hold timestamps dictionaries (one per patient stop)
         self.stops_timestamps_list = []
 
-        # Create PatientTypeSummary instance
-        self.stat_patient_type_summary = obstat.ReportPatientTypeSummary()
-
 
 class Patient:
     """
@@ -463,7 +460,6 @@ class ExitNode:
         # Statistical accumulators
         self.num_entries = 0
         self.num_exits = 0
-        self.tot_occ_time = 0.0
         self.last_entry_ts = None
         self.last_exit_ts = None
 
@@ -499,12 +495,6 @@ class ExitNode:
         patient.exit_ts[csn] = self.env.now
         patient.wait_to_exit[csn] = 0.0
 
-        total_time_in_system = patient.exit_ts[csn] - patient.request_entry_ts[1]
-
-        # Update patient type summary counters
-        obsystem.stat_patient_type_summary.num_exits.update({patient.patient_type: 1})
-        obsystem.stat_patient_type_summary.tot_patient_time_in_system[patient.patient_type] += total_time_in_system
-
         # Create dictionaries of timestamps for patient_stop log
         for stop in range(len(patient.unit_stops)):
             if patient.unit_stops[stop] is not None:
@@ -530,7 +520,7 @@ class ExitNode:
                                   'bwaited_to_enter': patient.entry_ts[stop] > patient.request_entry_ts[stop],
                                   'bwaited_to_exit': patient.exit_ts[stop] > patient.request_exit_ts[stop]}
                 except TypeError:
-                    pass
+                    raise TypeError(f'Unable to create timestamps dict for stop {stop} for patient {patient}.')
 
                 obsystem.stops_timestamps_list.append(timestamps)
 
@@ -812,7 +802,6 @@ class PatientGeneratorWeeklyStaticSchedule:
 
     def __init__(self, env, arrival_stream_uid: ArrivalType,
                  schedule: NDArray,
-                 arrival_stream_rg: int,
                  stop_time: float = simpy.core.Infinity, max_arrivals: int = simpy.core.Infinity,
                  patient_flow_system: PatientFlowSystem = None):
 
@@ -820,7 +809,7 @@ class PatientGeneratorWeeklyStaticSchedule:
         self.env = env
         self.arrival_stream_uid = arrival_stream_uid
         self.schedule = schedule
-        self.arr_stream_rg = arrival_stream_rg
+        #self.arr_stream_rg = arrival_stream_rg
         self.stop_time = stop_time
         self.max_arrivals = max_arrivals
         self.patient_flow_system = patient_flow_system
@@ -937,11 +926,20 @@ def simulate(config: Config, rep_num: int):
             patient_generators_scheduled[sched_id] = \
                 PatientGeneratorWeeklyStaticSchedule(
                     env, sched_id, config.schedules[sched_id],
-                    config.rg['arrivals'],
                     stop_time=config.run_time, max_arrivals=config.max_arrivals, patient_flow_system=obsystem)
 
     # Run the simulation replication
     env.run(until=config.run_time)
+
+    # Create the stops and visits dataframes
+    stops_df, visits_df = obstat.create_stops_visits_dfs(obsystem)
+
+    # Compute occupancy stats
+    occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+
+    # Compute and gather summary stats for this scenario replication
+    scenario_rep_summary_dict = obstat.create_rep_summary(
+        config.scenario, rep_num, obsystem, stops_df, visits_df, occ_stats_df)
 
     # TODO - design output processing scheme
     # Patient generator stats
@@ -951,11 +949,22 @@ def simulate(config: Config, rep_num: int):
     print(arrival_summary)
 
     # Patient type summary
-    print(obsystem.stat_patient_type_summary)
+    pat_type_summary = obstat.ReportPatientTypeSummary(config.scenario,
+                                                       rep_num,
+                                                       visits_df,
+                                                       config)
+    print(pat_type_summary)
 
     # Delivery summary
-    delivery_summary = obstat.ReportDeliverySummary(config.scenario, rep_num, obsystem.stat_patient_type_summary)
+    delivery_summary = obstat.ReportDeliverySummary(config.scenario,
+                                                    rep_num,
+                                                    visits_df,
+                                                    config)
     print(delivery_summary)
+
+    # Occupancy summary
+    occ_summary = obstat.ReportOccupancySummary(config.scenario, rep_num, occ_stats_df)
+    print(occ_summary)
 
     # Unit stats
     flow_stat_summary = obstat.ReportUnitFlowStats(config.scenario, rep_num, obsystem)
@@ -965,31 +974,20 @@ def simulate(config: Config, rep_num: int):
     exit_summary = obstat.ReportExitSummary(config.scenario, rep_num, obsystem)
     print(exit_summary)
 
-    # Compute occupancy stats and print summary
-    occ_stats_df, occ_log_df = obstat.compute_occ_stats(obsystem, quantiles=[0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
-    occ_summary = obstat.ReportOccupancySummary(config.scenario, rep_num, occ_stats_df)
-    print(occ_summary)
-
-    # Compute and gather summary stats for this scenario replication
-    scenario_rep_summary_dict = obstat.create_rep_summary(
-        config.scenario, rep_num, obsystem, occ_stats_df, config.run_time, config.warmup_time)
-
     # Write stats and log files
     if config.paths['occ_stats'] is not None:
         obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
 
     if config.paths['occ_logs'] is not None:
-        obio.write_log('occ_log', config.paths['occ_logs'], occ_log_df, config.scenario, rep_num)
+        obio.write_log('occ_log', config.paths['occ_logs'], occ_log_df, rep_num, config)
 
     if config.paths['stop_logs'] is not None:
-        stop_log_df = pd.DataFrame(obsystem.stops_timestamps_list)
-        # Convert timestamps to calendar time if needed
-        if obsystem.sim_calendar.use_calendar_time:
-            for field in ['request_entry_ts', 'entry_ts', 'request_exit_ts', 'exit_ts']:
-                stop_log_df[field] = stop_log_df[field].map(
-                    lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
+        obio.write_log('stop_log', config.paths['stop_logs'],
+                       stops_df, rep_num, config)
 
-        obio.write_log('stop_log', config.paths['stop_logs'], stop_log_df, config.scenario, rep_num)
+    if config.paths['visit_logs'] is not None:
+        obio.write_log('visit_log', config.paths['stop_logs'],
+                       visits_df, rep_num, config)
 
     return scenario_rep_summary_dict
 

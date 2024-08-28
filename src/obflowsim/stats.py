@@ -17,6 +17,8 @@ import obqueueing as obq
 from obflowsim.simulate import PatientFlowSystem
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
 from obflowsim import io as obio
+from obflowsim.config import Config
+from obflowsim.clock_tools import to_sim_calendar_time
 
 
 class ReportExitSummary:
@@ -30,7 +32,7 @@ class ReportExitSummary:
         self.pfs = pfs
 
     def __str__(self):
-        exit_summary = output_header("Patient exit stats", 70, self.scenario, self.rep_num)
+        exit_summary = output_header("Patient exit stats (includes warmup period)", 70, self.scenario, self.rep_num)
 
         exit_summary += "Num patients entering system: {}\n".format(self.pfs.entry.num_entries)
         exit_summary += "Num patients exiting system: {}\n".format(self.pfs.exit.num_exits)
@@ -41,35 +43,30 @@ class ReportExitSummary:
 
 class ReportPatientTypeSummary:
     """
-    Stores counts and accumulated length of stay by patient type
-
     Printing an instance reports number of exits and ALOS by patient type.
     """
 
-    def __init__(self):
-
-        self.num_exits = Counter({i: 0 for i in PatientType})
-        self.tot_patient_time_in_system = {i: 0.0 for i in PatientType}
-        self.alos = {i: 0.0 for i in PatientType}
+    def __init__(self, scenario: str, rep_num: int, visits_df: pd.DataFrame, config: Config):
+        self.scenario = scenario
+        self.rep_num = rep_num
+        self.warmup_time = config.warmup_time
+        self.visits_df = visits_df[(visits_df['system_entry_ts'] >= self.warmup_time)]
 
     def __str__(self):
-        self.compute_alos()
-        exits_summary = f'\n{"Number of exits and ALOS (includes exits during warmup)":40}\n'
+
+        visits_filtered_df_grp = self.visits_df.groupby(['patient_type'])
+        num_visits = visits_filtered_df_grp['system_entry_ts'].count()
+        alos = visits_filtered_df_grp['total_time_in_system'].mean()
+
+        exits_summary = f'\n{"Number of exits and ALOS":40}\n'
         exits_summary += f'{40 * "-"}\n'
         header = f'{"patient_type":20}{"exits":>7}{"ALOS":>10}\n'
         exits_summary += header
-        for pt, num_exits in self.num_exits.items():
-            exits_summary += f'{pt.value:20}{num_exits:7}'
-            exits_summary += f'{self.alos[pt]:10.1f}\n'
+        for pt in num_visits.index:
+            exits_summary += f'{pt:20}{num_visits[pt]:7}'
+            exits_summary += f'{alos[pt]:10.1f}\n'
 
         return exits_summary
-
-    def compute_alos(self):
-        for i in PatientType:
-            if self.num_exits[i] > 0:
-                self.alos[i] = self.tot_patient_time_in_system[i] / self.num_exits[i]
-            else:
-                self.alos[i] = 0.0
 
 
 class ReportDeliverySummary:
@@ -77,26 +74,17 @@ class ReportDeliverySummary:
     Report object containing basic delivery related counts.
     """
 
-    def __init__(self, scenario: str, rep_num: int, pts: ReportPatientTypeSummary):
+    def __init__(self, scenario: str, rep_num: int, visits_df: pd.DataFrame, config: Config):
         self.scenario = scenario
         self.rep_num = rep_num
-        self.patient_type_summary = pts
+        self.warmup_time = config.warmup_time
+        self.visits_df = visits_df[(visits_df['system_entry_ts'] >= self.warmup_time)]
 
-        self.tot_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
-                                   if 'NAT' in pt or 'CSECT' in pt])
-
-        self.tot_nat_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
-                                       if 'NAT' in pt])
-
-        self.tot_csect_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
-                                         if 'CSECT' in pt])
-
+        self.tot_deliveries = self.visits_df['delivery'].sum()
+        self.tot_nat_deliveries = self.visits_df['nat_delivery'].sum()
+        self.tot_csect_deliveries = self.visits_df['csect_delivery'].sum()
         assert (self.tot_deliveries == self.tot_nat_deliveries + self.tot_csect_deliveries)
-
         self.pct_csect = self.tot_csect_deliveries / self.tot_deliveries
-
-        self.tot_non_deliveries = sum([v for pt, v in self.patient_type_summary.num_exits.items()
-                                       if 'NAT' not in pt and 'CSECT' not in pt])
 
     def __str__(self):
         delivery_summary = output_header("Delivery summary", 60, self.scenario, self.rep_num)
@@ -105,7 +93,6 @@ class ReportDeliverySummary:
         delivery_summary += f'{"Natural deliveries":25}{self.tot_nat_deliveries:7}\n'
         delivery_summary += f'{"C-section deliveries":25}{self.tot_csect_deliveries:7}\n'
         delivery_summary += f'{"Pct C-section deliveries":25}{self.pct_csect:7.3f}\n\n'
-        delivery_summary += f'{"Total non-deliveries":25}{self.tot_non_deliveries:7}\n\n'
 
         return delivery_summary
 
@@ -123,15 +110,15 @@ class ReportArrivalGeneratorSummary:
 
     def __str__(self):
 
-        arrival_summary = output_header("Patient generator stats", 70, self.scenario, self.rep_num)
+        arrival_summary = output_header("Patient generator stats (includes warmup period)", 70, self.scenario, self.rep_num)
 
         for arrival_stream_uid in self.gen_poisson:
             arrival_summary += \
-                f"Num patients generated by {arrival_stream_uid}: {self.gen_poisson[arrival_stream_uid].num_patients_created}"
+                f"Num patients generated by {arrival_stream_uid}: {self.gen_poisson[arrival_stream_uid].num_patients_created}\n"
 
         for arrival_stream_uid in self.gen_scheduled:
             arrival_summary += \
-                f"Num patients generated by {arrival_stream_uid}: {self.gen_scheduled[arrival_stream_uid].num_patients_created}"
+                f"Num patients generated by {arrival_stream_uid}: {self.gen_scheduled[arrival_stream_uid].num_patients_created}\n"
 
         return arrival_summary
 
@@ -204,7 +191,9 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
             # Create occupancy dataframe and compute time in each state
             df = pd.DataFrame(occ, columns=['timestamp', 'occ'])
             if obsystem.sim_calendar.use_calendar_time:
-                df['calendar_ts'] = df['timestamp'].map(lambda x: obsystem.sim_calendar.to_sim_calendar_time(x))
+                df['calendar_ts'] = df['timestamp'].map(lambda x: to_sim_calendar_time(x,
+                                                                                       obsystem.config.start_date,
+                                                                                       obsystem.config.base_time_unit))
             df['occ_weight'] = -1 * df['timestamp'].diff(periods=-1)
 
             last_weight = end_time - df.iloc[-1, 0]
@@ -650,35 +639,22 @@ def varsum(df, unit, pm, alpha):
     return pm_varsum_df
 
 
-def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
-                       occ_stats_df: pd.DataFrame | Path, run_time: float, warmup: float = 0):
-
-
+def create_stops_visits_dfs(obsystem: PatientFlowSystem):
     """
-    Creates replication summary dictionary
-
+    Create patient stops dataframe and visits dataframe. 
+    
+    All records are included whether or not they occur during the warmup period. Any output statistics 
+    computations are responsible for including or excluding data from the warmup period.
+    
     Parameters
     ----------
-    scenario
-    rep_num
     obsystem
-    occ_stats_path
-    run_time
-    warmup
-
 
     Returns
     -------
-    Dict of summary stats for this scenario and rep
+    Dict of DataFrames with keys of 'stops' and 'visits'.
 
     """
-
-    start_analysis = warmup
-    end_analysis = run_time
-    num_days = (run_time - warmup) / BASE_TIME_UNITS_PER_DAY[obsystem.config.base_time_unit]
-
-    results = []
-    active_units = []
 
     stops_df = pd.DataFrame(obsystem.stops_timestamps_list)
     # Create visit level df
@@ -691,41 +667,74 @@ def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
     stops_df_exit.rename(columns={'exit_ts': 'system_exit_ts'}, inplace=True)
     visits_df = stops_df_entry.merge(stops_df_exit)
 
-    # Filter out patient stops during the warmup period
-    stops_df = stops_df[(stops_df['entry_ts'] >= start_analysis) ]
-    visits_df = visits_df[(visits_df['system_entry_ts'] >= start_analysis)]
-
     # Filter the entry and exit stops out of stops_df
     stops_df = stops_df[(stops_df['unit'] != UnitName.ENTRY) & (stops_df['unit'] != UnitName.EXIT)]
 
-    # Compute visit stats
+    # Compute visit related features
     visits_df['total_time_in_system'] = visits_df['system_exit_ts'] - visits_df['system_entry_ts']
     visits_df['delivery'] = visits_df['patient_type'].map(lambda x: 'NAT' in x or 'CSECT' in x)
     visits_df['csect_delivery'] = visits_df['patient_type'].map(lambda x: 'CSECT' in x)
     visits_df['nat_delivery'] = visits_df['patient_type'].map(lambda x: 'NAT' in x)
+    
+    return stops_df, visits_df
+    
+    
+def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
+                       stops_df: pd.DataFrame, visits_df: pd.DataFrame,
+                       occ_stats_df: pd.DataFrame | Path):
+
+
+    """
+    Creates replication summary dictionary
+
+    Parameters
+    ----------
+    scenario
+    rep_num
+    stops_visits_dfs
+    occ_stats_df
+    run_time
+    warmup
+
+
+    Returns
+    -------
+    Dict of summary stats for this scenario and rep
+
+    """
+
+    start_analysis = obsystem.config.warmup_time
+    end_analysis = obsystem.config.run_time
+    num_days = (end_analysis - start_analysis) / BASE_TIME_UNITS_PER_DAY[obsystem.config.base_time_unit]
+
+    active_units = []
+
+    # Filter out patient stops during the warmup period
+    stops_filtered_df = stops_df[(stops_df['entry_ts'] >= start_analysis) ]
+    visits_filtered_df = visits_df[(visits_df['system_entry_ts'] >= start_analysis)]
 
     # Delivery summary
-    tot_deliveries = visits_df['delivery'].sum()
-    tot_nat_deliveries = visits_df['nat_delivery'].sum()
-    tot_csect_deliveries = visits_df['csect_delivery'].sum()
+    tot_deliveries = visits_filtered_df['delivery'].sum()
+    tot_nat_deliveries = visits_filtered_df['nat_delivery'].sum()
+    tot_csect_deliveries = visits_filtered_df['csect_delivery'].sum()
     assert (tot_deliveries == tot_nat_deliveries + tot_csect_deliveries)
     pct_csect = tot_csect_deliveries / tot_deliveries
 
     # LOS means and sds - planned and actual
-    stops_df_grp_unit = stops_df.groupby(['unit'])
-    plos_mean = stops_df_grp_unit['planned_los'].mean()
-    plos_sd = stops_df_grp_unit['planned_los'].std()
-    plos_skew = stops_df_grp_unit['planned_los'].skew()
-    # plos_kurt = stops_df_grp_unit['planned_los'].apply(pd.DataFrame.kurt)
+    stops_filtered_df_grp_unit = stops_filtered_df.groupby(['unit'])
+    plos_mean = stops_filtered_df_grp_unit['planned_los'].mean()
+    plos_sd = stops_filtered_df_grp_unit['planned_los'].std()
+    plos_skew = stops_filtered_df_grp_unit['planned_los'].skew()
+    # plos_kurt = stops_filtered_df_grp_unit['planned_los'].apply(pd.DataFrame.kurt)
 
-    actlos_mean = stops_df_grp_unit['exit_enter'].mean()
-    actlos_sd = stops_df_grp_unit['exit_enter'].std()
-    actlos_skew = stops_df_grp_unit['exit_enter'].skew()
-    # actlos_kurt = stops_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
+    actlos_mean = stops_filtered_df_grp_unit['exit_enter'].mean()
+    actlos_sd = stops_filtered_df_grp_unit['exit_enter'].std()
+    actlos_skew = stops_filtered_df_grp_unit['exit_enter'].skew()
+    # actlos_kurt = stops_filtered_df_grp_unit['exit_enter'].apply(pd.DataFrame.kurt)
 
-    grp_unit = stops_df.groupby(['unit'])
-    grp_pattype_unit = stops_df.groupby(['patient_type', 'unit'])
-    grp_unit_blocked = stops_df[(stops_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
+    grp_unit = stops_filtered_df.groupby(['unit'])
+    grp_pattype_unit = stops_filtered_df.groupby(['patient_type', 'unit'])
+    grp_unit_blocked = stops_filtered_df[(stops_filtered_df['entry_tryentry'] > 0)].groupby(['unit'], group_keys=False)
 
     blocked_uncond_stats = grp_unit['entry_tryentry'].apply(get_stats, 'delay_')
     blocked_cond_stats = grp_unit_blocked['entry_tryentry'].apply(get_stats, 'delay_')
@@ -750,7 +759,7 @@ def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
         # else:
         #     newrec[f'num_visits_{unit.lower()}'] = 0
 
-        newrec[f'num_visits_{unit.lower()}'] = stops_df_grp_unit['entry_ts'].count()[unit]
+        newrec[f'num_visits_{unit.lower()}'] = stops_filtered_df_grp_unit['entry_ts'].count()[unit]
 
     # LOS stats for each unit
     for unit in units:
@@ -780,7 +789,7 @@ def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
     # Interarrival time stats for each unit
     for unit in units:
         if newrec[f'num_visits_{unit.lower()}'] > 0:
-            arrtimes_unit = stops_df.loc[stops_df.unit == unit, 'request_entry_ts']
+            arrtimes_unit = stops_filtered_df.loc[stops_filtered_df.unit == unit, 'request_entry_ts']
             # Make sure arrival times are sorted to compute interarrival times
             arrtimes_unit.sort_values(inplace=True)
             iatimes_unit = arrtimes_unit.diff(1).iloc[1:]
@@ -862,7 +871,7 @@ def process_command_line(argv=None):
     # Add arguments
     parser.add_argument(
         "scenario_rep_simout_path", type=str,
-        help="Path and filename containing the scenario rep output summary created by obflow_io.concat_stop_summaries"
+        help="Path and filename containing the scenario rep output summary created by io.concat_stop_summaries"
     )
 
     parser.add_argument(

@@ -29,7 +29,7 @@ from typing import (
 
 from obflowsim.config import Config, mean_from_dist_params
 import obflowsim.obconstants as obconstants
-from obflowsim.obconstants import UnitName
+from obflowsim.clock_tools import to_sim_calendar_time
 
 
 def load_config(cfg: str):
@@ -187,30 +187,44 @@ def process_discharge_pattern_file(discharge_file: str | Path):
 def write_log(which_log: str,
               log_path: str | Path,
               df: pd.DataFrame,
-              scenario: str,
               rep_num: int,
-              egress: bool = True):
+              config: Config):
     """
 
     Parameters
     ----------
+
     which_log
     log_path
     df
     scenario
     rep_num
-    egress
+    use_calendar_time
+
 
     Returns
     -------
 
     """
+    scenario = config.scenario
+    start_date = config.start_date
+    base_time_unit = config.base_time_unit
+    use_calendar_time = config.use_calendar_time
+
     csv_path = Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
 
-    if egress:
-        df.to_csv(csv_path, index=False)
+    if which_log == 'stop_log':
+        if use_calendar_time:
+            for field in ['request_entry_ts', 'entry_ts', 'request_exit_ts', 'exit_ts']:
+                df[field] = df[field].map(lambda x: to_sim_calendar_time(x, start_date, base_time_unit))
+    elif which_log == 'visit_log':
+        if use_calendar_time:
+            for field in ['system_entry_ts', 'system_exit_ts']:
+                df[field] = df[field].map(lambda x: to_sim_calendar_time(x, start_date, base_time_unit))
     else:
-        df[(df['unit'] != UnitName.ENTRY) & (df['unit'] != UnitName.EXIT)].to_csv(csv_path, index=False)
+        pass
+
+        df.to_csv(csv_path, index=False)
 
 
 def concat_stop_summaries(stop_summaries_path: str | Path, output_path: str | Path,

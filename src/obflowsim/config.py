@@ -104,7 +104,7 @@ class Config:
         try:
             self.num_replications = config_dict['run_settings']['num_replications']
         except KeyError:
-            self.num_replications =  obconstants.DEFAULT_NUM_REPLICATIONS
+            self.num_replications = obconstants.DEFAULT_NUM_REPLICATIONS
 
         # Create random number generators
         self.rg = {}
@@ -136,7 +136,6 @@ class Config:
         except KeyError:
             self.discharge_pattern_file = None
             self.discharge_pattern = None
-
 
         # Branching probabilities
         self.branching_probabilities = config_dict['branching_probabilities']
