@@ -161,7 +161,7 @@ routes:
     - id: LDR_PP
       from: LDR
       to: PP
-      discharge_adjustment: ./input/discharge_cdf.txt
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: PP_EXIT
       from: PP
       to: EXIT

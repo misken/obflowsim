@@ -7,7 +7,6 @@ import networkx as nx
 from networkx import DiGraph
 
 from obflowsim.obconstants import UnitName
-from obflowsim.simulate import PatientFlowSystem, Patient
 
 
 class Router(ABC):
@@ -33,7 +32,7 @@ class Router(ABC):
 
 
 class StaticRouter(Router):
-    def __init__(self, env, patient_flow_system: PatientFlowSystem):
+    def __init__(self, env, patient_flow_system):
         """
         Routes patients having a fixed, serial route
 
@@ -107,7 +106,7 @@ class StaticRouter(Router):
         # TODO: Implement route validation rules
         return True
 
-    def create_route(self, patient: Patient) -> DiGraph:
+    def create_route(self, patient) -> DiGraph:
         """
 
         Parameters
@@ -140,7 +139,7 @@ class StaticRouter(Router):
 
         return route_graph
 
-    def get_next_stop(self, patient: Patient):
+    def get_next_stop(self, patient):
         """
         Get next unit in route
 

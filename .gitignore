@@ -15,6 +15,7 @@ src/obflowsim.egg-info/
 tests/input/*.bak
 tests/output/
 notebooks/output/
+notebooks/input/
 tests/input/.virtual_documents/
 docs/devnotes/*.pdf
 

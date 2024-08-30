@@ -24,7 +24,6 @@ import obflowsim.obqueueing as obq
 from obflowsim.config import Config
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar
-from obflowsim.los import los_blocking_adjustment, los_discharge_adjustment
 from obflowsim.routing import StaticRouter
 
 
@@ -471,10 +470,10 @@ class PatientCareUnit:
         patient.planned_los[patient.current_stop_num] = planned_los
 
         # Do any blocking related los adjustments.
-        blocking_adj_los = los_blocking_adjustment(self, patient, planned_los, previous_unit_name)
+        blocking_adj_los = self.los_blocking_adjustment(patient, planned_los, previous_unit_name)
 
         # Do discharge timing related los adjustments
-        adjusted_los = los_discharge_adjustment(pfs.config, pfs, patient, self.name,
+        adjusted_los = self.los_discharge_adjustment(pfs.config, pfs, patient,
                                                 blocking_adj_los, previous_unit_name)
 
         patient.adjusted_los[patient.current_stop_num] = adjusted_los
@@ -543,6 +542,52 @@ class PatientCareUnit:
                    self.unit.count, alos)
         return msg
 
+
+    def los_blocking_adjustment(self, patient: Patient, planned_los: float, previous_unit_name: str):
+        if previous_unit_name != UnitName.ENTRY and patient.current_stop_num > 1:
+            G = patient.route_graph
+            los_adjustment_type = G[previous_unit_name][self.name]['blocking_adjustment']
+            if los_adjustment_type == 'delay':
+                blocking_adj_los = max(0, planned_los - patient.wait_to_exit[patient.current_stop_num - 1])
+            else:
+                blocking_adj_los = planned_los
+        else:
+            blocking_adj_los = planned_los
+
+        return blocking_adj_los
+
+
+    def los_discharge_adjustment(self, config: Config, pfs: PatientFlowSystem, patient: Patient,
+                                 planned_los: float,
+                                 previous_unit_name: str):
+        if patient.current_stop_num > 1:
+            G = patient.route_graph
+            discharge_pdf = G[previous_unit_name][self.name]['discharge_adjustment']
+            if discharge_pdf is not None:
+
+                sim_calendar = pfs.sim_calendar
+                now_datetime = sim_calendar.datetime(pfs.env.now)
+
+                # Get period of day of discharge
+                rg = config.rg['los']
+                discharge_period = rg.choice(discharge_pdf.index, p=discharge_pdf['p'].values)
+                period_fraction = rg.random()
+
+                # Get datetime of initial discharge
+                initial_discharge_datetime = now_datetime + pd.Timedelta(planned_los, sim_calendar.base_time_unit)
+                initial_discharge_date = pd.Timestamp(initial_discharge_datetime.date())
+
+                new_discharge_datetime = initial_discharge_date + pd.Timedelta(discharge_period + period_fraction,
+                                                                               sim_calendar.base_time_unit)
+
+                discharge_adj_los = (new_discharge_datetime - now_datetime) / pd.Timedelta(1,
+                                                                                           sim_calendar.base_time_unit)
+            else:
+                discharge_adj_los = planned_los
+        else:
+            discharge_adj_los = planned_los
+
+        return discharge_adj_los
 
 class PatientPoissonArrivals:
     """ Generates patients according to a stationary Poisson process with specified rate.
