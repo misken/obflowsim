@@ -1,0 +1,275 @@
+scenario: test_blocking_schedc
+
+run_settings:
+  num_replications: 2
+  run_time: 9960
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional or alternate stopping condition
+  # max_arrivals = 1000
+  
+  # h = hours
+  base_time_unit: h
+  
+  # Comment out start_date line to use default of 2024-01-01
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2024-01-01
+  
+ 
+outputs:
+  occ_logs:
+    path: ./output/logs
+    write: 1
+  occ_stats:
+    path: ./output/stats
+    write: 1
+  stop_logs:
+    path: ./output/logs
+    write: 1
+  visit_logs:
+    path: ./output/logs
+    write: 1
+  summary_stats:
+    path: ./output/stats
+    write: 1
+
+# Use toggles to turn random arrival streams on and off   
+rand_arrival_rates:
+    spont_labor: 0.20
+    urgent_induced_labor: 0.00
+    non_delivery_ldr: 0.05
+    non_delivery_pp: 0.05
+
+# 1=on, 0=off    
+rand_arrival_toggles:
+    spont_labor: 1
+    urgent_induced_labor: 0
+    non_delivery_ldr: 1
+    non_delivery_pp: 1
+
+# Use toggles to turn scheduled arrival streams on and off   
+schedule_files:
+    sched_csect: ./input/sched_c_long.txt
+    sched_induced_labor: ./input/sched_induction_long.txt
+
+# 1=on, 0=off    
+sched_arrival_toggles:
+    sched_csect: 1
+    sched_induced_labor: 0
+
+branching_probabilities:
+    pct_spont_labor_aug: 0.4
+    pct_spont_labor_to_c: 0.2
+    pct_aug_labor_to_c: 0.06
+    pct_sched_ind_to_c: 0.12
+    pct_urg_ind_to_c: 0.12
+    
+# Comment out following line if you don't want to use time of day discharge patterns
+# discharge_pattern_file: ./input/discharge_cdf.txt
+
+# You can define input parameters to be used in los_distributions section
+los_params:
+    mean_los_csect: 1.0
+    mean_los_ldr: 12.0
+    mean_los_obs: 2.4
+    mean_los_pp_c: 72.0
+    mean_los_pp_noc: 48.0
+    mean_los_ldr_nondelivery: 36.0
+    mean_los_pp_nondelivery: 48.0
+    num_erlang_stages_csect: 4
+    num_erlang_stages_ldr: 2
+    num_erlang_stages_obs: 1
+    num_erlang_stages_pp: 8
+    num_erlang_stages_ldr_nondelivery: 2
+    num_erlang_stages_pp_nondelivery: 4
+
+# You can use a restricted set of numpy distributions parameterized via
+# constants that are user defined parameters in the los_params section. 
+#  
+los_distributions:
+    RAND_SPONT_NAT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    RAND_SPONT_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    RAND_AUG_NAT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    RAND_AUG_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    SCHED_CSECT:
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
+    SCHED_IND_NAT:
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    SCHED_IND_CSECT:
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    URGENT_IND_NAT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    URGENT_IND_CSECT:
+        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    RAND_NONDELIV_LDR:
+        LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+    RAND_NONDELIV_PP:
+        PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
+
+
+locations:
+  OBS:
+    capacity: 1000
+  LDR:
+    capacity: 8
+  CSECT:
+    capacity: 1000
+  PP:
+    capacity: 30
+
+
+random_number_streams:
+  arrivals: 27568
+  los: 31249
+  
+  
+routes:
+  RAND_SPONT_NAT:
+    edges:
+    - id: ENTRY_OBS
+      from: ENTRY
+      to: OBS
+    - id: OBS_LDR
+      from: OBS
+      to: LDR
+      blocking_adjustment: delay
+    - id: LDR_PP
+      from: LDR
+      to: PP
+      discharge_adjustment: ./input/discharge_pdf.txt
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  RAND_SPONT_CSECT:
+    edges:
+    - id: ENTRY_OBS
+      from: ENTRY
+      to: OBS
+    - id: OBS_LDR
+      from: OBS
+      to: LDR
+      blocking_adjustment: delay
+    - id: LDR_CSECT
+      from: LDR
+      to: CSECT
+    - id: CSECT_pp
+      from: CSECT
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  RAND_AUG_NAT:
+    edges:
+    - id: ENTRY_OBS
+      from: ENTRY
+      to: OBS
+    - id: OBS_LDR
+      from: OBS
+      to: LDR
+      blocking_adjustment: delay
+    - id: LDR_PP
+      from: LDR
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  RAND_AUG_CSECT:
+    edges:
+    - id: ENTRY_OBS
+      from: ENTRY
+      to: OBS
+    - id: OBS_LDR
+      from: OBS
+      to: LDR
+      blocking_adjustment: delay
+    - id: LDR_CSECT
+      from: LDR
+      to: CSECT
+    - id: CSECT_pp
+      from: CSECT
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  SCHED_CSECT:
+    edges:
+    - id: ENTRY_CSECT
+      from: ENTRY
+      to: CSECT
+    - id: CSECT_pp
+      from: CSECT
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  SCHED_IND_NAT:
+    edges:
+    - id: ENTRY_LDR
+      from: ENTRY
+      to: LDR
+    - id: LDR_PP
+      from: LDR
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  SCHED_IND_CSECT:
+    edges:
+    - id: ENTRY_LDR
+      from: ENTRY
+      to: LDR
+    - id: LDR_CSECT
+      from: LDR
+      to: CSECT
+    - id: CSECT_pp
+      from: CSECT
+      to: PP
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+  RAND_NONDELIV_LDR:
+    edges:
+    - id: ENTRY_LDR
+      from: ENTRY
+      to: LDR
+    - id: LDR_EXIT
+      from: LDR
+      to: EXIT
+  RAND_NONDELIV_PP:
+    edges:
+    - id: ENTRY_PP
+      from: ENTRY
+      to: PP
+    - id: LDR_EXIT
+      from: PP
+      to: EXIT
+
+    
+    
+
+
