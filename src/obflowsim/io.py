@@ -29,7 +29,7 @@ from typing import (
 
 from obflowsim.config import Config, mean_from_dist_params
 import obflowsim.obconstants as obconstants
-from obflowsim.clock_tools import to_sim_calendar_time
+from obflowsim.clock_tools import to_sim_datetime
 
 
 def load_config(cfg: str):
@@ -214,17 +214,25 @@ def write_log(which_log: str,
     csv_path = Path(log_path / f"{which_log}_scenario_{scenario}_rep_{rep_num}.csv")
 
     if which_log == 'stop_log':
+        # Filter out records from warmup period
+        mask = df['entry_ts'] >= config.warmup_time
+        filtered_df = df.loc[mask].copy()
         if use_calendar_time:
             for field in ['request_entry_ts', 'entry_ts', 'request_exit_ts', 'exit_ts']:
-                df[field] = df[field].map(lambda x: to_sim_calendar_time(x, start_date, base_time_unit))
+                filtered_df[field] = filtered_df[field].map(lambda x: to_sim_datetime(x, start_date, base_time_unit))
     elif which_log == 'visit_log':
+        # Filter out records from warmup period
+        mask = df['system_entry_ts'] >= config.warmup_time
+        filtered_df = df.loc[mask].copy()
         if use_calendar_time:
             for field in ['system_entry_ts', 'system_exit_ts']:
-                df[field] = df[field].map(lambda x: to_sim_calendar_time(x, start_date, base_time_unit))
+                filtered_df[field] = filtered_df[field].map(lambda x: to_sim_datetime(x, start_date, base_time_unit))
     else:
-        pass
+        # Filter out records from warmup period
+        mask = df['timestamp'] >= config.warmup_time
+        filtered_df = df.loc[mask].copy()
 
-        df.to_csv(csv_path, index=False)
+    filtered_df.to_csv(csv_path, index=False)
 
 
 def concat_stop_summaries(stop_summaries_path: str | Path, output_path: str | Path,

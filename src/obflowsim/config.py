@@ -79,7 +79,6 @@ class Config:
             if self.base_time_unit not in ['h', 'm']:
                 raise ValueError('Base time unit must be h or m.')
         except KeyError:
-            # Default start_date is first Monday in 2024
             self.base_time_unit = obconstants.DEFAULT_BASE_TIME_UNIT
 
         # Stopping conditions and other run time settings
@@ -128,14 +127,6 @@ class Config:
                                                                                self.start_date, self.base_time_unit)
 
         self.sched_arrival_toggles = config_dict['sched_arrival_toggles']
-
-        # Discharge patterns
-        try:
-            self.discharge_pattern_file = config_dict['discharge_pattern_file']
-            self.discharge_pattern = obio.process_discharge_pattern_file(self.discharge_pattern_file)
-        except KeyError:
-            self.discharge_pattern_file = None
-            self.discharge_pattern = None
 
         # Branching probabilities
         self.branching_probabilities = config_dict['branching_probabilities']

@@ -18,7 +18,7 @@ from obflowsim.simulate import PatientFlowSystem
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
 from obflowsim import io as obio
 from obflowsim.config import Config
-from obflowsim.clock_tools import to_sim_calendar_time
+from obflowsim.clock_tools import to_sim_datetime
 
 
 class ReportExitSummary:
@@ -191,9 +191,9 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
             # Create occupancy dataframe and compute time in each state
             df = pd.DataFrame(occ, columns=['timestamp', 'occ'])
             if obsystem.sim_calendar.use_calendar_time:
-                df['calendar_ts'] = df['timestamp'].map(lambda x: to_sim_calendar_time(x,
-                                                                                       obsystem.config.start_date,
-                                                                                       obsystem.config.base_time_unit))
+                df['calendar_ts'] = df['timestamp'].map(lambda x: to_sim_datetime(x,
+                                                                                  obsystem.config.start_date,
+                                                                                  obsystem.config.base_time_unit))
             df['occ_weight'] = -1 * df['timestamp'].diff(periods=-1)
 
             last_weight = end_time - df.iloc[-1, 0]

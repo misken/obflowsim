@@ -67,9 +67,9 @@ branching_probabilities:
     pct_urg_ind_to_c: 0.12
     
 # Comment out following line if you don't want to use time of day discharge patterns
-discharge_pattern_file: ./input/discharge_cdf.txt
+# discharge_pattern_file: ./input/discharge_cdf.txt
 
-# You can define input parameters to be used on los_distributions section
+# You can define input parameters to be used in los_distributions section
 los_params:
     mean_los_csect: 1.0
     mean_los_ldr: 12.0
@@ -161,6 +161,7 @@ routes:
     - id: LDR_PP
       from: LDR
       to: PP
+      discharge_adjustment: ./input/discharge_cdf.txt
     - id: PP_EXIT
       from: PP
       to: EXIT

@@ -1,20 +1,11 @@
 import sys
 import logging
 from logging import Logger
-from copy import deepcopy
 from pathlib import Path
 import argparse
-from abc import ABC, abstractmethod
-
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    List,
-)
 
 from numpy.typing import (
     NDArray,
-    DTypeLike,
 )
 
 # if TYPE_CHECKING and TYPE_CHECKING != 'SPHINX':  # Avoid circular import
@@ -25,8 +16,6 @@ import pandas as pd
 import simpy
 # from numpy.random import default_rng
 # from numpy.random import Generator
-import networkx as nx
-from networkx import DiGraph
 # import json
 
 import obflowsim.io as obio
@@ -35,6 +24,8 @@ import obflowsim.obqueueing as obq
 from obflowsim.config import Config
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar
+from obflowsim.los import los_blocking_adjustment, los_discharge_adjustment
+from obflowsim.routing import StaticRouter
 
 
 # TODO - make sure all docstrings are complete
@@ -208,171 +199,6 @@ class Patient:
     def __repr__(self):
         return "patient id: {}, patient_type: {}, time: {}". \
             format(self.patient_id, self.patient_type, self.system_arrival_ts)
-
-
-class Router(ABC):
-
-    @abstractmethod
-    def validate_route_graph(self, route_graph: DiGraph) -> bool:
-        """
-        Determine if a route is considered valid
-
-        Parameters
-        ----------
-        route_graph
-
-        Returns
-        -------
-        True if route is valid
-        """
-        pass
-
-    @abstractmethod
-    def get_next_stop(self, entity):
-        pass
-
-
-class StaticRouter(Router):
-    def __init__(self, env, patient_flow_system: PatientFlowSystem):
-        """
-        Routes patients having a fixed, serial route
-
-        Parameters
-        ----------
-        env: Environment
-        obsystem: PatientFlowSystem
-        routes: Dict
-        """
-
-        self.env = env
-        self.patient_flow_system = patient_flow_system
-        # self.routes = patient_flow_system.config.routes
-        # self.los_distributions = patient_flow_system.config.los_distributions
-
-        # Dict of networkx DiGraph objects
-        self.route_graphs = {}
-
-        # Create route templates from routes list (of unit numbers)
-        for route_name, route in self.patient_flow_system.config.routes.items():
-            route_graph = nx.DiGraph()
-
-            # Add edges - simple serial route in this case
-            for edge in route['edges']:
-                route_graph.add_edge(edge['from'], edge['to'])
-
-                # Add blocking adjustment attribute
-                if 'blocking_adjustment' in edge:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'blocking_adjustment': edge['blocking_adjustment']}})
-                else:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'blocking_adjustment': 'none'}})
-
-            for node in route_graph.nodes():
-                nx.set_node_attributes(route_graph,
-                                       {node: {'planned_los': 0.0, 'actual_los': 0.0, 'blocked_duration': 0.0}})
-
-            # Each patient will eventually end up with their own copy of the route since
-            # it will contain LOS values
-            self.route_graphs[route_name] = route_graph.copy()
-            logging.debug(f"{self.env.now:.4f}: route graph {route_name} - {route_graph.edges}")
-
-    def validate_route_graph(self, route_graph: DiGraph) -> bool:
-        """
-        Make sure route is of appropriate structure for router.
-
-        Example: Static routes should have exactly one arc entering and one arc emanating from each non-egress node.
-
-        Parameters
-        ----------
-        route_graph: DiGraph
-
-        Returns
-        -------
-        bool
-            True if route is valid
-
-        """
-        # TODO: Implement route validation rules
-        return True
-
-    def create_route(self, patient: Patient) -> DiGraph:
-        """
-
-        Parameters
-        ----------
-        patient
-
-        entry_delay: float (default is 0 implying patient uses ENTRY only as a queueing location)
-            Used with scheduled arrivals by holding patient for ``entry_delay`` time units before allowed to enter
-
-        Returns
-        -------
-        DiGraph
-            Nodes are units with LOS information stored as node attributes
-
-        Notes
-        -----
-
-        """
-
-        # Copy the route template to create new graph object
-        route_graph = deepcopy(self.route_graphs[patient.patient_type])
-
-        # Sample from los distributions for planned_los
-        for unit, data in route_graph.nodes(data=True):
-            if unit == UnitName.ENTRY or unit == UnitName.EXIT:
-                route_graph.nodes[unit]['planned_los'] = 0.0
-            else:
-                route_graph.nodes[unit]['planned_los'] = \
-                    self.patient_flow_system.config.los_distributions[patient.patient_type][unit]()
-
-        return route_graph
-
-    def get_next_stop(self, patient: Patient):
-        """
-        Get next unit in route
-
-        Parameters
-        ----------
-        patient: Patient
-
-        Returns
-        -------
-        str
-            Unit names are used as node id's
-
-        """
-
-        # Get this patient's route graph
-        G = patient.route_graph
-
-        # Find all possible next units
-        if patient.current_stop_num > 0:
-            current_unit_name = patient.unit_stops[patient.current_stop_num]
-        else:
-            current_unit_name = UnitName.ENTRY
-
-        successors = [n for n in G.successors(current_unit_name)]
-        next_unit_name = successors[0]
-
-        # if next_unit_name is None:
-        #     if patient.current_stop_num == patient.route_length:
-        #         # Patient is at last stop
-        #         pass
-        #     else:
-        #         logging.error(
-        #             f"{self.env.now:.4f}: {patient.patient_id} has no next unit at {current_unit_name}.")
-        #     exit(1)
-        #
-        # else:
-        #     if next_unit_name == UnitName.EXIT:
-        #         next_unit_name = None
-        #
-        # logging.debug(
-        #     f"{self.env.now:.4f}: {patient.patient_id} current_unit_name {current_unit_name}, next_unit_name {next_unit_name}")
-
-        return next_unit_name
 
 
 class EntryNode:
@@ -641,25 +467,20 @@ class PatientCareUnit:
         # Generate los for this unit stay. Previous bed (if any) has been released.
         # TODO: Modeling discharge timing
         # TODO: Move LOS related code to separate method
-        los = patient.route_graph.nodes(data=True)[patient.current_unit_name]['planned_los']
-        patient.planned_los[patient.current_stop_num] = los
+        planned_los = patient.route_graph.nodes(data=True)[patient.current_unit_name]['planned_los']
+        patient.planned_los[patient.current_stop_num] = planned_los
 
         # Do any blocking related los adjustments.
-        if previous_unit_name != UnitName.ENTRY and patient.current_stop_num > 1:
-            G = patient.route_graph
-            los_adjustment_type = G[previous_unit_name][self.name]['blocking_adjustment']
-            if los_adjustment_type == 'delay':
-                adj_los = max(0, los - patient.wait_to_exit[patient.current_stop_num - 1])
-            else:
-                adj_los = los
-        else:
-            adj_los = los
+        blocking_adj_los = los_blocking_adjustment(self, patient, planned_los, previous_unit_name)
 
-        patient.adjusted_los[patient.current_stop_num] = adj_los
-        ####################################################################################33
+        # Do discharge timing related los adjustments
+        adjusted_los = los_discharge_adjustment(pfs.config, pfs, patient, self.name,
+                                                blocking_adj_los, previous_unit_name)
+
+        patient.adjusted_los[patient.current_stop_num] = adjusted_los
 
         # Wait for LOS to elapse
-        yield self.env.timeout(adj_los)
+        yield self.env.timeout(adjusted_los)
 
         # Determine next stop in route
         next_unit_name = patient.pfs.router.get_next_stop(patient)
@@ -809,7 +630,7 @@ class PatientGeneratorWeeklyStaticSchedule:
         self.env = env
         self.arrival_stream_uid = arrival_stream_uid
         self.schedule = schedule
-        #self.arr_stream_rg = arrival_stream_rg
+        # self.arr_stream_rg = arrival_stream_rg
         self.stop_time = stop_time
         self.max_arrivals = max_arrivals
         self.patient_flow_system = patient_flow_system
@@ -975,18 +796,18 @@ def simulate(config: Config, rep_num: int):
     print(exit_summary)
 
     # Write stats and log files
+    if config.paths['stop_logs'] is not None:
+        obio.write_log('stop_log', config.paths['stop_logs'],
+                       stops_df, rep_num, config)
+
     if config.paths['occ_stats'] is not None:
         obio.write_stats('occ_stats', config.paths['occ_stats'], occ_stats_df, config.scenario, rep_num)
 
     if config.paths['occ_logs'] is not None:
         obio.write_log('occ_log', config.paths['occ_logs'], occ_log_df, rep_num, config)
 
-    if config.paths['stop_logs'] is not None:
-        obio.write_log('stop_log', config.paths['stop_logs'],
-                       stops_df, rep_num, config)
-
     if config.paths['visit_logs'] is not None:
-        obio.write_log('visit_log', config.paths['stop_logs'],
+        obio.write_log('visit_log', config.paths['visit_logs'],
                        visits_df, rep_num, config)
 
     return scenario_rep_summary_dict

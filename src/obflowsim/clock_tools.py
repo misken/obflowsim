@@ -4,7 +4,7 @@ import pandas as pd
 from obflowsim.config import Config
 
 
-def to_sim_calendar_time(sim_time, start_date, base_time_unit):
+def to_sim_datetime(sim_time, start_date, base_time_unit):
     elapsed_timedelta = pd.to_timedelta(sim_time, unit=base_time_unit)
     return start_date + elapsed_timedelta
 
@@ -21,7 +21,13 @@ class SimCalendar:
         self.use_calendar_time = config.use_calendar_time
 
     def now(self):
-        return to_sim_calendar_time(self.env.now, self.start_date, self.base_time_unit)
+        return to_sim_datetime(self.env.now, self.start_date, self.base_time_unit)
+
+    def datetime(self, sim_time: float):
+        return to_sim_datetime(sim_time, self.start_date, self.base_time_unit)
+
+    def date(self, sim_time):
+        return to_sim_datetime(sim_time, self.start_date, self.base_time_unit).date
 
 
 
