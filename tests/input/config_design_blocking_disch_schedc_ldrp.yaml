@@ -1,5 +1,4 @@
-scenario: test_blocking_schedc
-
+scenario: test_ldrp
 run_settings:
   num_replications: 2
   run_time: 9960
@@ -74,8 +73,8 @@ los_params:
     mean_los_csect: 1.0
     mean_los_ldr: 12.0
     mean_los_obs: 2.4
-    mean_los_pp_c: 72.0
-    mean_los_pp_noc: 48.0
+    mean_los_ldrp_c: 72.0
+    mean_los_ldrp_noc: 48.0
     mean_los_ldr_nondelivery: 36.0
     mean_los_pp_nondelivery: 48.0
     num_erlang_stages_csect: 4
@@ -85,68 +84,23 @@ los_params:
     num_erlang_stages_ldr_nondelivery: 2
     num_erlang_stages_pp_nondelivery: 4
 
-# You can use a restricted set of numpy distributions parameterized via
-# constants that are user defined parameters in the los_params section. 
-#  
-los_distributions:
-    RAND_SPONT_NAT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-    RAND_SPONT_CSECT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    RAND_AUG_NAT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-    RAND_AUG_CSECT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    SCHED_CSECT:
-        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
-    SCHED_IND_NAT:
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-    SCHED_IND_CSECT:
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    URGENT_IND_NAT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-    URGENT_IND_CSECT:
-        OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-        LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-        CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-        PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-    RAND_NONDELIV_LDR:
-        LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
-    RAND_NONDELIV_PP:
-        PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
 
 locations:
   OBS:
     capacity: 1000
-  LDR:
-    capacity: 8
+  LDRP:
+    capacity: 38
   CSECT:
     capacity: 1000
-  PP:
-    capacity: 30
 
 
 random_number_streams:
   arrivals: 27568
   los: 31249
   
+# For the los attribute, you can use a restricted set of numpy distributions parameterized via
+# constants that are user defined parameters in the los_params section. 
   
 routes:
   RAND_SPONT_NAT:
@@ -154,119 +108,131 @@ routes:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-    - id: OBS_LDR
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+    - id: OBS_LDRP
       from: OBS
-      to: LDR
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
       blocking_adjustment: delay
-    - id: LDR_PP
-      from: LDR
-      to: PP
       discharge_adjustment: ./input/discharge_pdf.txt
-    - id: PP_EXIT
-      from: PP
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   RAND_SPONT_CSECT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-    - id: OBS_LDR
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+    - id: OBS_LDRP
       from: OBS
-      to: LDR
+      to: LDRP
+      los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
       blocking_adjustment: delay
-    - id: LDR_CSECT
-      from: LDR
+    - id: LDRP_CSECT
+      from: LDRP
       to: CSECT
-    - id: CSECT_pp
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+    - id: CSECT_LDRP
       from: CSECT
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   RAND_AUG_NAT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-    - id: OBS_LDR
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+    - id: OBS_LDRP
       from: OBS
-      to: LDR
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
       blocking_adjustment: delay
-    - id: LDR_PP
-      from: LDR
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      discharge_adjustment: ./input/discharge_pdf.txt
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   RAND_AUG_CSECT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-    - id: OBS_LDR
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+    - id: OBS_LDRP
       from: OBS
-      to: LDR
+      to: LDRP
+      los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
       blocking_adjustment: delay
-    - id: LDR_CSECT
-      from: LDR
+    - id: LDRP_CSECT
+      from: LDRP
       to: CSECT
-    - id: CSECT_pp
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+    - id: CSECT_LDRP
       from: CSECT
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   SCHED_CSECT:
     edges:
     - id: ENTRY_CSECT
       from: ENTRY
       to: CSECT
-    - id: CSECT_pp
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+    - id: CSECT_LDRP
       from: CSECT
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   SCHED_IND_NAT:
     edges:
-    - id: ENTRY_LDR
+    - id: ENTRY_LDRP
       from: ENTRY
-      to: LDR
-    - id: LDR_PP
-      from: LDR
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   SCHED_IND_CSECT:
     edges:
-    - id: ENTRY_LDR
+    - id: ENTRY_LDRP
       from: ENTRY
-      to: LDR
-    - id: LDR_CSECT
-      from: LDR
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+    - id: LDRP_CSECT
+      from: LDRP
       to: CSECT
-    - id: CSECT_pp
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+    - id: CSECT_LDRP
       from: CSECT
-      to: PP
-    - id: PP_EXIT
-      from: PP
+      to: LDRP
+      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   RAND_NONDELIV_LDR:
     edges:
-    - id: ENTRY_LDR
+    - id: ENTRY_LDRP
       from: ENTRY
-      to: LDR
-    - id: LDR_EXIT
-      from: LDR
+      to: LDRP
+      los: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
   RAND_NONDELIV_PP:
     edges:
-    - id: ENTRY_PP
+    - id: ENTRY_LDRP
       from: ENTRY
-      to: PP
-    - id: LDR_EXIT
-      from: PP
+      to: LDRP
+      los: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
+    - id: LDRP_EXIT
+      from: LDRP
       to: EXIT
 
     

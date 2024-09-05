@@ -3,32 +3,13 @@ import argparse
 from pathlib import Path
 from enum import IntEnum
 
-import numpy.random
 import pandas as pd
 from pandas import Timestamp
 import yaml
 
 import numpy as np
-import json
-from functools import partial
-import copy
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    Iterator,
-    List,
-    NewType,
-    Optional,
-    Tuple,
-)
-
-from obflowsim.config import Config, mean_from_dist_params
-import obflowsim.obconstants as obconstants
+from obflowsim.config import Config
 from obflowsim.clock_tools import to_sim_datetime
 
 
@@ -50,61 +31,6 @@ def load_config(cfg: str):
         yaml_config = yaml.safe_load(yaml_file)
 
     return yaml_config
-
-
-def _get_args_and_kwargs(*args, **kwargs):
-    return args, kwargs
-
-
-def _convert_str_to_args_and_kwargs(s: str):
-    return eval(s.replace(s[:s.find('(')], '_get_args_and_kwargs'))
-
-
-def _convert_str_to_func_name(s: str):
-    return s[:s.find('(')]
-
-
-def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg: numpy.random.Generator):
-    """
-
-    Parameters
-    ----------
-    rg
-    raw_los_dists: Dict
-    los_params: Dict
-
-    Returns
-    -------
-    Dict of partial functions for LOS generation by pat type and unit
-
-    """
-
-    # Replace all los_param use with literal values
-    los_dists_str_json = json.dumps(raw_los_dists)
-
-    los_params_sorted = [key for key in los_params]
-    los_params_sorted.sort(key=len, reverse=True)
-
-    for param in los_params_sorted:
-        los_dists_str_json = los_dists_str_json.replace(param, str(los_params[param]))
-
-    los_dists_instantiated = json.loads(los_dists_str_json)
-
-    los_dists_partials = copy.deepcopy(los_dists_instantiated)
-    los_means = copy.deepcopy(los_dists_instantiated)
-    for key_pat_type in los_dists_partials:
-        for key_unit, raw_dist_str in los_dists_partials[key_pat_type].items():
-            func_name = _convert_str_to_func_name(raw_dist_str)
-            # Check for valid func name
-            if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
-                args, kwargs = _convert_str_to_args_and_kwargs(raw_dist_str)
-                partial_dist_func = partial(eval(f'rg.{func_name}'), *args, **kwargs)
-                los_dists_partials[key_pat_type][key_unit] = partial_dist_func
-                los_means[key_pat_type][key_unit] = mean_from_dist_params(func_name, args, kwargs)
-            else:
-                raise NameError(f"The use of '{func_name}' is not allowed")
-
-    return los_dists_partials, los_means
 
 
 def process_schedule_file(sched_file: str | Path, start_date: Timestamp, base_time_unit: str):

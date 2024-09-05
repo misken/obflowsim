@@ -2,15 +2,14 @@ from pathlib import Path
 from datetime import datetime
 
 import pandas as pd
-import numpy as np
 from numpy.random import default_rng
 
 from typing import (
-    Dict, Tuple,
-)
+    Dict, )
 
 import simpy.core
 
+import obflowsim.los
 import obflowsim.obconstants as obconstants
 import obflowsim.io as obio
 
@@ -133,8 +132,8 @@ class Config:
 
         # Length of stay
         self.los_params = config_dict['los_params']
-        self.los_distributions, self.los_means = obio.create_los_partials(config_dict['los_distributions'],
-                                                                          self.los_params, self.rg['los'])
+        self.los_distributions, self.los_means = obflowsim.los.create_los_partials(config_dict['los_distributions'],
+                                                                                   self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
         self.routes = config_dict['routes']
@@ -149,42 +148,3 @@ class Config:
                 self.paths[output] = Path(self.outputs[output]['path'])
 
 
-def mean_from_dist_params(dist_name: str, params: Tuple, kwparams):
-    """
-    Compute mean from distribution name and parameters - numpy based
-
-    Parameters
-    ----------
-    dist_name
-    params
-
-    Returns
-    -------
-
-    """
-
-    if dist_name == 'gamma':
-        _shape = params[0]
-        _scale = params[1]
-        _mean = _shape * _scale
-    elif dist_name == 'triangular':
-        _left = params[0]
-        _mode = params[1]
-        _right = params[2]
-        _mean = (_left + _mode + _right) / 3
-    elif dist_name == 'normal':
-        _mean = params[0]
-    elif dist_name == 'exponential':
-        _mean = params[0]
-    elif dist_name == 'uniform':
-        _left = params[0]
-        _right = params[1]
-        _mean = (_left + _right) / 2
-    elif dist_name == 'choice':
-        _a = params[0]
-        _p = kwparams['p']
-        _mean = sum(x * y for x, y in zip(_a, _p))
-    else:
-        raise ValueError(f'The {dist_name} distribution is not implemented yet for LOS modeling')
-
-    return _mean

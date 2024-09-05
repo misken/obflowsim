@@ -464,9 +464,7 @@ class PatientCareUnit:
             f"{self.env.now:.4f}: {patient.patient_id} waited {self.env.now - bed_request_ts:.4f} time units for {self.name} bed")
 
         # Generate los for this unit stay. Previous bed (if any) has been released.
-        # TODO: Modeling discharge timing
-        # TODO: Move LOS related code to separate method
-        planned_los = patient.route_graph.nodes(data=True)[patient.current_unit_name]['planned_los']
+        planned_los = patient.route_graph.edges(data=True)[previous_unit_name, patient.current_unit_name]['planned_los']
         patient.planned_los[patient.current_stop_num] = planned_los
 
         # Do any blocking related los adjustments.
@@ -934,3 +932,5 @@ def main(argv=None):
 
 if __name__ == '__main__':
     sys.exit(main())
+
+

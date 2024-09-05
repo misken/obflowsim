@@ -7,6 +7,7 @@ import networkx as nx
 from networkx import DiGraph
 
 from obflowsim.obconstants import UnitName
+from obflowsim.los import create_los_partial
 
 
 class Router(ABC):
@@ -130,12 +131,12 @@ class StaticRouter(Router):
         route_graph = deepcopy(self.route_graphs[patient.patient_type])
 
         # Sample from los distributions for planned_los
-        for unit, data in route_graph.nodes(data=True):
-            if unit == UnitName.ENTRY or unit == UnitName.EXIT:
-                route_graph.nodes[unit]['planned_los'] = 0.0
-            else:
-                route_graph.nodes[unit]['planned_los'] = \
-                    self.patient_flow_system.config.los_distributions[patient.patient_type][unit]()
+        for edge, data in route_graph.edges(data=True):
+            if 'los' in edge:
+                los_params = self.patient_flow_system.config.los_params
+                rg = self.patient_flow_system.config.rg['arrivals']
+                edge['planned_los'] = \
+                    create_los_partial(edge['los', los_params, rg])
 
         return route_graph
 
