@@ -1,17 +1,18 @@
-import copy
-import json
+# import copy
+# import json
 from functools import partial
 from typing import Tuple, Dict
 
 import numpy.random
-import pandas as pd
+# import pandas as pd
 
 from obflowsim import obconstants as obconstants
 
-from obflowsim.simulate import Patient, PatientCareUnit, PatientFlowSystem
-from obflowsim.obconstants import UnitName
-from obflowsim.config import Config
-from networkx import DiGraph
+
+# from obflowsim.simulate import Patient, PatientCareUnit, PatientFlowSystem
+# from obflowsim.obconstants import UnitName
+# from obflowsim.config import Config
+# from networkx import DiGraph
 
 
 # def los_blocking_adjustment(unit: PatientCareUnit, patient: Patient, planned_los: float, previous_unit_name: str):
@@ -118,19 +119,57 @@ def create_los_partial(raw_los_dist_input: str, los_params: Dict, rg: numpy.rand
     los_params_sorted = [key for key in los_params]
     los_params_sorted.sort(key=len, reverse=True)
 
+    los_dist_str = raw_los_dist_input
     for param in los_params_sorted:
-        los_dist_str = raw_los_dist_input.replace(param, str(los_params[param]))
+        los_dist_str = los_dist_str.replace(param, str(los_params[param]))
 
     func_name = _convert_str_to_func_name(los_dist_str)
 
     if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
         args, kwargs = _convert_str_to_args_and_kwargs(los_dist_str)
         partial_dist_func = partial(eval(f'rg.{func_name}'), *args, **kwargs)
-        los_mean = mean_from_dist_params(func_name, args, kwargs)
+        # los_mean = mean_from_dist_params(func_name, args, kwargs)
     else:
         raise NameError(f"The use of '{func_name}' is not allowed")
 
-    return partial_dist_func, los_mean
+    return partial_dist_func
+
+
+def los_mean(raw_los_dist_input: str, los_params: Dict):
+    """
+
+    Parameters
+    ----------
+    raw_los_dist_input: str
+    los_params: Dict
+    rg
+
+    Returns
+    -------
+    Updated DiGraph with planned_los attribute set to partial functions for LOS generation by pat type and edge.
+
+    The planned_los attribute represents the planned LOS in the unit represented by the destination node of the edge.
+
+    """
+
+    # Replace all los_param use with literal values
+    los_params_sorted = [key for key in los_params]
+    los_params_sorted.sort(key=len, reverse=True)
+
+    los_dist_str = raw_los_dist_input
+    for param in los_params_sorted:
+        los_dist_str = los_dist_str.replace(param, str(los_params[param]))
+
+    func_name = _convert_str_to_func_name(los_dist_str)
+
+    if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
+        args, kwargs = _convert_str_to_args_and_kwargs(los_dist_str)
+        _los_mean = mean_from_dist_params(func_name, args, kwargs)
+    else:
+        raise NameError(f"The use of '{func_name}' is not allowed")
+
+    return _los_mean
+
 
 # def create_los_partials(raw_los_dists: Dict, los_params: Dict, rg: numpy.random.Generator):
 #     """

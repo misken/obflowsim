@@ -1,11 +1,18 @@
+from __future__ import annotations
+
 import logging
 
 import numpy as np
 import networkx as nx
 
-from obflowsim.config import Config
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from obflowsim.config import Config
+    from obflowsim.simulate import PatientFlowSystem
+
 from obflowsim.obconstants import PatientType
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_YEAR
+
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +197,7 @@ def non_delivery_subrates(config: Config):
     return non_delivery_subrate
 
 
-def static_load_analysis(config: Config):
+def static_load_analysis(obsystem: PatientFlowSystem):
     """
     Compute offered loads and intensities to identify under capacitated systems.
 
@@ -198,7 +205,7 @@ def static_load_analysis(config: Config):
 
     Parameters
     ----------
-    config
+    obsystem
 
     Returns
     -------
@@ -213,8 +220,9 @@ def static_load_analysis(config: Config):
     """
 
     # Determine arrival rate to each unit by patient type and mean los values
+    config = obsystem.config
     arrival_rates_pattype = arrival_rates(config)
-    los_means = config.los_means
+    route_graphs_pattype = obsystem.router.route_graphs
 
     # Compute overall volume
     annual_volume = {}
@@ -251,11 +259,14 @@ def static_load_analysis(config: Config):
 
     # Compute loads by unit and by unit, patient type combo
     for pat_type, rate in arrival_rates_pattype.items():
-        for unit in config.locations:
-            if unit in los_means[pat_type]:
-                ptype_key = f'{unit}_{pat_type}'
-                load_unit[unit] += rate * los_means[pat_type][unit]
-                load_unit_ptype[ptype_key] = rate * los_means[pat_type][unit]
+        route_graph = route_graphs_pattype[pat_type]
+        for edge, data in route_graph.edges(data=True):
+        #for edge in route_graphs_pattype[pat_type]['edges']:
+            unit = edge[1] # Destination node is second component of edge tuple
+            los_mean = edge['los_mean']
+            ptype_key = f'{unit}_{pat_type}'
+            load_unit[unit] += rate * los_mean
+            load_unit_ptype[ptype_key] = rate * los_mean
 
     # Compute traffic intensity based on load and capacity
     traffic_intensity = {}

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import logging
 from logging import Logger
@@ -21,11 +23,15 @@ import simpy
 import obflowsim.io as obio
 import obflowsim.stats as obstat
 import obflowsim.obqueueing as obq
-from obflowsim.config import Config
+import obflowsim.config as obconfig
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar
 from obflowsim.routing import StaticRouter
 
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from obflowsim.config import Config
 
 # TODO - make sure all docstrings are complete
 
@@ -435,7 +441,7 @@ class PatientCareUnit:
 
         # If this is first stop, previous unit was Entry node
         if patient.current_stop_num == 1:
-            previous_unit_name = UnitName.ENTRY
+            previous_unit_name = UnitName.ENTRY.value
             previous_unit = pfs.entry
         else:
             previous_unit_name = patient.unit_stops[csn - 1]
@@ -464,7 +470,8 @@ class PatientCareUnit:
             f"{self.env.now:.4f}: {patient.patient_id} waited {self.env.now - bed_request_ts:.4f} time units for {self.name} bed")
 
         # Generate los for this unit stay. Previous bed (if any) has been released.
-        planned_los = patient.route_graph.edges(data=True)[previous_unit_name, patient.current_unit_name]['planned_los']
+        planned_los = patient.route_graph.edges[previous_unit_name, patient.current_unit_name]['planned_los']()
+        # planned_los = patient.route_graph.edges(data=True)[previous_unit_name, patient.current_unit_name]['planned_los']
         patient.planned_los[patient.current_stop_num] = planned_los
 
         # Do any blocking related los adjustments.
@@ -792,6 +799,19 @@ def simulate(config: Config, rep_num: int):
                     env, sched_id, config.schedules[sched_id],
                     stop_time=config.run_time, max_arrivals=config.max_arrivals, patient_flow_system=obsystem)
 
+    # Check for undercapacitated system and compute basic load stats
+    # load_unit, load_unit_ptype, unit_intensity, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem)
+    # logging.info(
+    #     f"{0.0:.4f}: annual_volume\n{annual_volume}).")
+    # logging.info(
+    #     f"{0.0:.4f}: annual_volume_ptype\n{annual_volume_ptype}).")
+    # logging.info(
+    #     f"{0.0:.4f}: unit_load\n{load_unit}).")
+    # logging.info(
+    #     f"{0.0:.4f}: unit_load\n{load_unit_ptype}).")
+    # logging.info(
+    #     f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
+
     # Run the simulation replication
     env.run(until=config.run_time)
 
@@ -897,25 +917,14 @@ def main(argv=None):
 
     # Load scenario configuration file and create OBConfig object
     config_dict = obio.load_config(args.config)
-    config = Config(config_dict)
+    config = obconfig.Config(config_dict)
 
     # Initialize scenario specific variables
     scenario = config.scenario
     summary_stat_path = \
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
 
-    # Check for undercapacitated system and compute basic load stats
-    load_unit, load_unit_ptype, unit_intensity, annual_volume_ptype, annual_volume = obq.static_load_analysis(config)
-    logging.info(
-        f"{0.0:.4f}: annual_volume\n{annual_volume}).")
-    logging.info(
-        f"{0.0:.4f}: annual_volume_ptype\n{annual_volume_ptype}).")
-    logging.info(
-        f"{0.0:.4f}: unit_load\n{load_unit}).")
-    logging.info(
-        f"{0.0:.4f}: unit_load\n{load_unit_ptype}).")
-    logging.info(
-        f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
+
 
     results = []
     for i in range(1, config.num_replications + 1):

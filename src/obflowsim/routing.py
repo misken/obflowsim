@@ -7,7 +7,7 @@ import networkx as nx
 from networkx import DiGraph
 
 from obflowsim.obconstants import UnitName
-from obflowsim.los import create_los_partial
+from obflowsim.los import create_los_partial, los_mean
 
 
 class Router(ABC):
@@ -33,24 +33,24 @@ class Router(ABC):
 
 
 class StaticRouter(Router):
-    def __init__(self, env, patient_flow_system):
+    def __init__(self, env, pfs):
         """
         Routes patients having a fixed, serial route
 
         Parameters
         ----------
         env: Environment
-        obsystem: PatientFlowSystem
-        routes: Dict
+        pfs: PatientFlowSystem
         """
 
         self.env = env
-        self.patient_flow_system = patient_flow_system
-        # self.routes = patient_flow_system.config.routes
-        # self.los_distributions = patient_flow_system.config.los_distributions
+        self.patient_flow_system = pfs
+
 
         # Dict of networkx DiGraph objects
         self.route_graphs = {}
+
+        los_params = pfs.config.los_params
 
         # Create route templates from routes list (of unit numbers)
         for route_name, route in self.patient_flow_system.config.routes.items():
@@ -59,6 +59,15 @@ class StaticRouter(Router):
             # Add edges - simple serial route in this case
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
+
+                if 'los' in edge:
+                    edge['los_mean'] = los_mean(edge['los'], los_params)
+
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {'los': edge['los']}})
+
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {'los_mean': edge['los_mean']}})
 
                 # Add blocking adjustment attribute
                 if 'blocking_adjustment' in edge:
@@ -131,12 +140,13 @@ class StaticRouter(Router):
         route_graph = deepcopy(self.route_graphs[patient.patient_type])
 
         # Sample from los distributions for planned_los
-        for edge, data in route_graph.edges(data=True):
-            if 'los' in edge:
+        for u, v, data in route_graph.edges(data=True):
+            edge = route_graph.edges[u, v]
+            if 'los' in data:
                 los_params = self.patient_flow_system.config.los_params
                 rg = self.patient_flow_system.config.rg['arrivals']
                 edge['planned_los'] = \
-                    create_los_partial(edge['los', los_params, rg])
+                    create_los_partial(edge['los'], los_params, rg)
 
         return route_graph
 

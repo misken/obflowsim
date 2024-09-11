@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import argparse
 import re
@@ -14,11 +16,16 @@ from scipy.stats import t
 from obflowsim.obconstants import PatientType, UnitName
 import obqueueing as obq
 
-from obflowsim.simulate import PatientFlowSystem
+
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
 from obflowsim import io as obio
-from obflowsim.config import Config
+
 from obflowsim.clock_tools import to_sim_datetime
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from obflowsim.simulate import PatientFlowSystem
+    from obflowsim.config import Config
 
 
 class ReportExitSummary:
@@ -181,7 +188,7 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     warmup_time = obsystem.config.warmup_time
 
     # Compute static loads
-    load_unit, load_unit_ptype, unit_rho, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem.config)
+    load_unit, load_unit_ptype, unit_rho, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem)
 
     for unit_name, unit in obsystem.patient_care_units.items():
         # Only compute if at least onc change in occupancy during simulation

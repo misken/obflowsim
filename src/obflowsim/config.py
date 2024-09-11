@@ -132,8 +132,8 @@ class Config:
 
         # Length of stay
         self.los_params = config_dict['los_params']
-        self.los_distributions, self.los_means = obflowsim.los.create_los_partials(config_dict['los_distributions'],
-                                                                                   self.los_params, self.rg['los'])
+        # self.los_distributions, self.los_means = obflowsim.los.create_los_partials(config_dict['los_distributions'],
+        #                                                                            self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
         self.routes = config_dict['routes']

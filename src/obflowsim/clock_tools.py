@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from simpy.core import Environment
 import pandas as pd
 
-from obflowsim.config import Config
-
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from obflowsim.config import Config
 
 def to_sim_datetime(sim_time, start_date, base_time_unit):
     elapsed_timedelta = pd.to_timedelta(sim_time, unit=base_time_unit)
