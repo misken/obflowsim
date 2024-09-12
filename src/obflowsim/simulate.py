@@ -800,17 +800,17 @@ def simulate(config: Config, rep_num: int):
                     stop_time=config.run_time, max_arrivals=config.max_arrivals, patient_flow_system=obsystem)
 
     # Check for undercapacitated system and compute basic load stats
-    # load_unit, load_unit_ptype, unit_intensity, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem)
-    # logging.info(
-    #     f"{0.0:.4f}: annual_volume\n{annual_volume}).")
-    # logging.info(
-    #     f"{0.0:.4f}: annual_volume_ptype\n{annual_volume_ptype}).")
-    # logging.info(
-    #     f"{0.0:.4f}: unit_load\n{load_unit}).")
-    # logging.info(
-    #     f"{0.0:.4f}: unit_load\n{load_unit_ptype}).")
-    # logging.info(
-    #     f"{0.0:.4f}: unit_intensity\n{unit_intensity}).")
+    static_load_summary = obq.static_load_analysis(obsystem)
+    logging.info(
+        f"{0.0:.4f}: annual_volume\n{static_load_summary['annual_volume']}).")
+    logging.info(
+        f"{0.0:.4f}: annual_volume_type\n{static_load_summary['annual_volume_type']}).")
+    logging.info(
+        f"{0.0:.4f}: unit_load\n{static_load_summary['load_unit']}).")
+    logging.info(
+        f"{0.0:.4f}: unit_load_type\n{static_load_summary['load_unit_type']}).")
+    logging.info(
+        f"{0.0:.4f}: intensity_unit\n{static_load_summary['intensity_unit']}).")
 
     # Run the simulation replication
     env.run(until=config.run_time)

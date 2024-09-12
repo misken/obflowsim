@@ -259,14 +259,16 @@ def static_load_analysis(obsystem: PatientFlowSystem):
 
     # Compute loads by unit and by unit, patient type combo
     for pat_type, rate in arrival_rates_pattype.items():
-        route_graph = route_graphs_pattype[pat_type]
-        for edge, data in route_graph.edges(data=True):
-        #for edge in route_graphs_pattype[pat_type]['edges']:
-            unit = edge[1] # Destination node is second component of edge tuple
-            los_mean = edge['los_mean']
-            ptype_key = f'{unit}_{pat_type}'
-            load_unit[unit] += rate * los_mean
-            load_unit_ptype[ptype_key] = rate * los_mean
+        if pat_type in route_graphs_pattype:
+            route_graph = route_graphs_pattype[pat_type]
+            for u, v, data in route_graph.edges(data=True):
+                edge = route_graph.edges[u, v]
+                unit = v  # Destination node is second component of edge tuple
+                if 'los_mean' in edge:
+                    los_mean = edge['los_mean']
+                    ptype_key = f'{unit}_{pat_type}'
+                    load_unit[unit] += rate * los_mean
+                    load_unit_ptype[ptype_key] = rate * los_mean
 
     # Compute traffic intensity based on load and capacity
     traffic_intensity = {}
@@ -276,4 +278,8 @@ def static_load_analysis(obsystem: PatientFlowSystem):
             logger.warning(
                 f"Traffic intensity = {traffic_intensity[unit_name]:.2f} for {unit_name} (load={load_unit[unit_name]:.1f}, cap={unit['capacity']})")
 
-    return load_unit, load_unit_ptype, traffic_intensity, annual_volume_ptype, annual_volume
+    return {'load_unit': load_unit,
+            'load_unit_type': load_unit_ptype,
+            'intensity_unit': traffic_intensity,
+            'annual_volume_type': annual_volume_ptype,
+            'annual_volume': annual_volume}

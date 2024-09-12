@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
-from typing import Dict
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 from scipy.stats import t
 
 from obflowsim.obconstants import PatientType, UnitName
-import obqueueing as obq
+from obflowsim.obqueueing import static_load_analysis
 
 
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_DAY
@@ -167,13 +167,17 @@ class ReportOccupancySummary:
         return occ_stats_summary
 
 
-def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)):
+def compute_occ_stats(obsystem: PatientFlowSystem,
+                      static_load_summary: Dict = None,
+                      quantiles: Tuple = (0.05, 0.25, 0.5, 0.75, 0.95, 0.99)):
     """
     Compute occupancy statistics by unit
 
     Parameters
     ----------
+
     obsystem : PatientFlowSystem
+    static_load_summary: Dict
     quantiles : tuple, quantiles to compute
 
     Returns
@@ -187,8 +191,13 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
     end_time = obsystem.config.run_time
     warmup_time = obsystem.config.warmup_time
 
-    # Compute static loads
-    load_unit, load_unit_ptype, unit_rho, annual_volume_ptype, annual_volume = obq.static_load_analysis(obsystem)
+    # Compute static loads if necessary
+    if static_load_summary is None:
+        static_load_summary = static_load_analysis(obsystem)
+
+    load_unit = static_load_summary['load_unit']
+    intensity_unit = static_load_summary['intensity_unit']
+
 
     for unit_name, unit in obsystem.patient_care_units.items():
         # Only compute if at least onc change in occupancy during simulation
@@ -218,7 +227,7 @@ def compute_occ_stats(obsystem: PatientFlowSystem, quantiles=(0.05, 0.25, 0.5, 0
             occ_unit_stats_df = pd.DataFrame([{'unit': unit.name, 'capacity': unit.capacity,
                                                'mean_occ': weighted_stats.mean,
                                                'static_load': load_unit[unit.name],
-                                               'static_rho': unit_rho[unit.name],
+                                               'static_rho': intensity_unit[unit.name],
                                                'sd_occ': weighted_stats.std,
                                                'min_occ': df['occ'].min(), 'max_occ': df['occ'].max()}])
 
