@@ -28,10 +28,11 @@ from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 from obflowsim.clock_tools import SimCalendar
 from obflowsim.routing import StaticRouter
 
-
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from obflowsim.config import Config
+
 
 # TODO - make sure all docstrings are complete
 
@@ -479,11 +480,12 @@ class PatientCareUnit:
 
         # Do discharge timing related los adjustments
         adjusted_los = self.los_discharge_adjustment(pfs.config, pfs, patient,
-                                                blocking_adj_los, previous_unit_name)
+                                                     blocking_adj_los, previous_unit_name)
 
         patient.adjusted_los[patient.current_stop_num] = adjusted_los
 
         # Wait for LOS to elapse
+
         yield self.env.timeout(adjusted_los)
 
         # Determine next stop in route
@@ -547,7 +549,6 @@ class PatientCareUnit:
                    self.unit.count, alos)
         return msg
 
-
     def los_blocking_adjustment(self, patient: Patient, planned_los: float, previous_unit_name: str):
         if previous_unit_name != UnitName.ENTRY and patient.current_stop_num > 1:
             G = patient.route_graph
@@ -560,7 +561,6 @@ class PatientCareUnit:
             blocking_adj_los = planned_los
 
         return blocking_adj_los
-
 
     def los_discharge_adjustment(self, config: Config, pfs: PatientFlowSystem, patient: Patient,
                                  planned_los: float,
@@ -585,14 +585,19 @@ class PatientCareUnit:
                 new_discharge_datetime = initial_discharge_date + pd.Timedelta(discharge_period + period_fraction,
                                                                                sim_calendar.base_time_unit)
 
-                discharge_adj_los = (new_discharge_datetime - now_datetime) / pd.Timedelta(1,
-                                                                                           sim_calendar.base_time_unit)
+                if new_discharge_datetime < now_datetime:
+                    # Time travel to past not allowed
+                    discharge_adj_los = planned_los
+                else:
+                    discharge_adj_los = (new_discharge_datetime - now_datetime) / pd.Timedelta(1,
+                                                                                        sim_calendar.base_time_unit)
             else:
                 discharge_adj_los = planned_los
         else:
             discharge_adj_los = planned_los
 
         return discharge_adj_los
+
 
 class PatientPoissonArrivals:
     """ Generates patients according to a stationary Poisson process with specified rate.
@@ -924,8 +929,6 @@ def main(argv=None):
     summary_stat_path = \
         config_dict['outputs']['summary_stats']['path'] / Path(f'summary_stats_scenario_{scenario}.csv')
 
-
-
     results = []
     for i in range(1, config.num_replications + 1):
         print(f'\nRunning scenario {scenario}, replication {i}')
@@ -941,5 +944,3 @@ def main(argv=None):
 
 if __name__ == '__main__':
     sys.exit(main())
-
-

@@ -84,6 +84,7 @@ class ReportDeliverySummary:
     def __init__(self, scenario: str, rep_num: int, visits_df: pd.DataFrame, config: Config):
         self.scenario = scenario
         self.rep_num = rep_num
+        self.run_time = config.run_time
         self.warmup_time = config.warmup_time
         self.visits_df = visits_df[(visits_df['system_entry_ts'] >= self.warmup_time)]
 
@@ -100,6 +101,7 @@ class ReportDeliverySummary:
         delivery_summary += f'{"Natural deliveries":25}{self.tot_nat_deliveries:7}\n'
         delivery_summary += f'{"C-section deliveries":25}{self.tot_csect_deliveries:7}\n'
         delivery_summary += f'{"Pct C-section deliveries":25}{self.pct_csect:7.3f}\n\n'
+        delivery_summary += f'{"Post warm-up runtime":25}{self.run_time - self.warmup_time:7.1f}\n\n'
 
         return delivery_summary
 
@@ -830,26 +832,20 @@ def create_rep_summary(scenario: str, rep_num: int, obsystem: PatientFlowSystem,
             newrec[f'occ_max_{unit.lower()}'] = occ_stats_df.loc[unit]['max_occ']
 
     # Compute blocking related statistics
-    if ('LDR', 'delay_num_gt_0') in blocked_uncond_stats.index:
-        newrec['prob_blockedby_ldr'] = \
-            blocked_uncond_stats[('LDR', 'delay_num_gt_0')] / blocked_uncond_stats[('LDR', 'delay_count')]
+    for unit in units:
+        if (unit, 'delay_num_gt_0') in blocked_uncond_stats.index:
+            newrec[f'prob_blockedby_{unit}'] = \
+                blocked_uncond_stats[(unit, 'delay_num_gt_0')] / blocked_uncond_stats[(unit, 'delay_count')]
 
-    if ('LDR', 'delay_mean') in blocked_cond_stats.index:
-        newrec['blockedby_ldr_mean'] = blocked_cond_stats[('LDR', 'delay_mean')]
-        newrec['blockedby_ldr_p95'] = blocked_cond_stats[('LDR', 'delay_p95')]
-    else:
-        newrec['blockedby_ldr_mean'] = 0.0
-        newrec['blockedby_ldr_p95'] = 0.0
+            newrec[f'pct_blocked_by_{unit}'] = \
+                blocked_uncond_stats[(unit, 'delay_num_gt_0')] / blocked_uncond_stats[(unit, 'delay_count')]
 
-    newrec['pct_blocked_by_pp'] = \
-        blocked_uncond_stats[('PP', 'delay_num_gt_0')] / blocked_uncond_stats[('PP', 'delay_count')]
-
-    if ('PP', 'delay_mean') in blocked_cond_stats.index:
-        newrec['blockedby_pp_mean'] = blocked_cond_stats[('PP', 'delay_mean')]
-        newrec['blockedby_pp_p95'] = blocked_cond_stats[('PP', 'delay_p95')]
-    else:
-        newrec['blockedby_pp_mean'] = 0.0
-        newrec['blockedby_pp_p95'] = 0.0
+        if (unit, 'delay_mean') in blocked_cond_stats.index:
+            newrec[f'blockedby_{unit}_mean'] = blocked_cond_stats[(unit, 'delay_mean')]
+            newrec[f'blockedby_{unit}_p95'] = blocked_cond_stats[(unit, 'delay_p95')]
+        else:
+            newrec[f'blockedby_{unit}_mean'] = 0.0
+            newrec[f'blockedby_{unit}_p95'] = 0.0
 
     newrec['timestamp'] = str(datetime.now())
 

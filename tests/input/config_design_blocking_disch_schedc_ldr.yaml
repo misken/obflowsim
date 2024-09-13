@@ -86,60 +86,15 @@ los_params:
     num_erlang_stages_pp_nondelivery: 4
 
 
-#  
-# los_distributions:
-#     RAND_SPONT_NAT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-#     RAND_SPONT_CSECT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-#         CSECT_PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-#     RAND_AUG_NAT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-#     RAND_AUG_CSECT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-#         CSECT_PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-#     SCHED_CSECT:
-#         ENTRY_CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-#         CSECT_PP:  gamma(num_erlang_stages_pp, mean_los_pp_c / num_erlang_stages_pp)
-#     SCHED_IND_NAT:
-#         ENTRY_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-#     SCHED_IND_CSECT:
-#         ENTRY_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-#         CSECT_PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-#     URGENT_IND_NAT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_PP:  choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
-#     URGENT_IND_CSECT:
-#         ENTRY_OBS: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
-#         OBS_LDR: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
-#         LDR_CSECT: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
-#         CSECT_PP:  choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
-#     RAND_NONDELIV_LDR:
-#         ENTRY_LDR: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
-#     RAND_NONDELIV_PP:
-#         LDR_PP: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
-
-
 locations:
   OBS:
-    capacity: 1000
+    capacity: 10
   LDR:
     capacity: 8
   CSECT:
-    capacity: 1000
+    capacity: 6
   PP:
-    capacity: 30
+    capacity: 25
 
 
 random_number_streams:

@@ -71,16 +71,16 @@ branching_probabilities:
 # You can define input parameters to be used in los_distributions section
 los_params:
     mean_los_csect: 1.0
-    mean_los_ldr: 12.0
     mean_los_obs: 2.4
+    mean_los_labor_c: 12.0
     mean_los_ldrp_c: 72.0
     mean_los_ldrp_noc: 48.0
     mean_los_ldr_nondelivery: 36.0
     mean_los_pp_nondelivery: 48.0
     num_erlang_stages_csect: 4
-    num_erlang_stages_ldr: 2
     num_erlang_stages_obs: 1
-    num_erlang_stages_pp: 8
+    num_erlang_stages_labor_c: 2
+    num_erlang_stages_ldrp: 8
     num_erlang_stages_ldr_nondelivery: 2
     num_erlang_stages_pp_nondelivery: 4
 
@@ -88,11 +88,11 @@ los_params:
 
 locations:
   OBS:
-    capacity: 1000
+    capacity: 10
   LDRP:
-    capacity: 38
-  CSECT:
     capacity: 1000
+  CSECT:
+    capacity: 6
 
 
 random_number_streams:
@@ -112,7 +112,7 @@ routes:
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_noc / num_erlang_stages_ldrp)
       blocking_adjustment: delay
       discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
@@ -127,8 +127,9 @@ routes:
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+      los: gamma(num_erlang_stages_labor_c, mean_los_labor_c / num_erlang_stages_labor_c)
       blocking_adjustment: delay
+      keep: 1
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
@@ -136,7 +137,8 @@ routes:
     - id: CSECT_LDRP
       from: CSECT
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_c / num_erlang_stages_ldrp)
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -149,7 +151,7 @@ routes:
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_noc / num_erlang_stages_ldrp)
       blocking_adjustment: delay
       discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
@@ -164,8 +166,9 @@ routes:
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
+      los: gamma(num_erlang_stages_labor_c, mean_los_labor_c / num_erlang_stages_labor_c)
       blocking_adjustment: delay
+      keep: 1
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
@@ -173,7 +176,8 @@ routes:
     - id: CSECT_LDRP
       from: CSECT
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_c / num_erlang_stages_ldrp)
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -187,6 +191,7 @@ routes:
       from: CSECT
       to: LDRP
       los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -195,7 +200,8 @@ routes:
     - id: ENTRY_LDRP
       from: ENTRY
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_noc / num_erlang_stages_ldrp)
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -204,7 +210,8 @@ routes:
     - id: ENTRY_LDRP
       from: ENTRY
       to: LDRP
-      los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+      los: gamma(num_erlang_stages_labor_c, mean_los_labor_c / num_erlang_stages_labor_c)
+      keep: 1
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
@@ -213,6 +220,7 @@ routes:
       from: CSECT
       to: LDRP
       los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -222,6 +230,7 @@ routes:
       from: ENTRY
       to: LDRP
       los: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
@@ -231,6 +240,7 @@ routes:
       from: ENTRY
       to: LDRP
       los: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
+      discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
