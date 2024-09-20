@@ -45,8 +45,8 @@ rand_arrival_rates:
 rand_arrival_toggles:
     spont_labor: 1
     urgent_induced_labor: 0
-    non_delivery_ldr: 1
-    non_delivery_pp: 1
+    non_delivery_ldr: 0
+    non_delivery_pp: 0
 
 # Use toggles to turn scheduled arrival streams on and off   
 schedule_files:
@@ -55,11 +55,11 @@ schedule_files:
 
 # 1=on, 0=off    
 sched_arrival_toggles:
-    sched_csect: 1
+    sched_csect: 0
     sched_induced_labor: 0
 
 branching_probabilities:
-    pct_spont_labor_aug: 0.4
+    pct_spont_labor_aug: 0.0
     pct_spont_labor_to_c: 0.2
     pct_aug_labor_to_c: 0.06
     pct_sched_ind_to_c: 0.12
@@ -101,14 +101,24 @@ random_number_streams:
   
 # For the los attribute, you can use a restricted set of numpy distributions parameterized via
 # constants that are user defined parameters in the los_params section. 
-  
+
+# IMPORTANT: During development of new LDRP flow logic, only the first two patient types are being used. Volume
+# is shut off via toggles and branching probs above.
+#
+# Also, in this scenario, patients who labor in LDRP and then need a C-section, are returned to their
+# same bed in LDRP. Want to get logic working for case where patient keeps bed in one unit while visiting 
+# another unit. In reality, we might use a traditional PP bed for such patients. We can model that as well.  
 routes:
   RAND_SPONT_NAT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
+      # This is the default
+      get_bed: 1  
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      # This is the default
+      release_bed: 1
     - id: OBS_LDRP
       from: OBS
       to: LDRP
@@ -129,14 +139,17 @@ routes:
       to: LDRP
       los: gamma(num_erlang_stages_labor_c, mean_los_labor_c / num_erlang_stages_labor_c)
       blocking_adjustment: delay
-      keep: 1
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      # Keep slot in LDRP while visiting CSECT
+      release_bed: 0
     - id: CSECT_LDRP
       from: CSECT
       to: LDRP
+      # Do NOT get another LDRP bed
+      get_bed: 0
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_c / num_erlang_stages_ldrp)
       discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT

@@ -6,7 +6,7 @@ import pandas as pd
 import networkx as nx
 from networkx import DiGraph
 
-from obflowsim.obconstants import UnitName
+from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
 from obflowsim.los import create_los_partial, los_mean
 
 
@@ -69,6 +69,21 @@ class StaticRouter(Router):
                     nx.set_edge_attributes(route_graph, {
                         (edge['from'], edge['to']): {'los_mean': edge['los_mean']}})
 
+                # Add get and keep bed attributes
+                if ATT_GET_BED in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_GET_BED: edge[ATT_GET_BED]}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_GET_BED: DEFAULT_GET_BED}})
+
+                if ATT_RELEASE_BED in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_RELEASE_BED: edge[ATT_RELEASE_BED]}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_RELEASE_BED: DEFAULT_RELEASE_BED}})
+
                 # Add blocking adjustment attribute
                 if 'blocking_adjustment' in edge:
                     nx.set_edge_attributes(route_graph, {
@@ -114,6 +129,8 @@ class StaticRouter(Router):
 
         """
         # TODO: Implement route validation rules
+
+        # For example, all beds must eventually be released and can't keep bed if dest is EXIT
         return True
 
     def create_route(self, patient) -> DiGraph:

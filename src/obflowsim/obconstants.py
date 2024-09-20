@@ -8,6 +8,11 @@ DEFAULT_RUN_TIME = simpy.core.Infinity
 DEFAULT_MAX_ARRIVALS = simpy.core.Infinity
 DEFAULT_WARMUP_TIME = 0
 DEFAULT_NUM_REPLICATIONS = 1
+DEFAULT_GET_BED = 1
+DEFAULT_RELEASE_BED = 1
+
+ATT_GET_BED = 'get_bed'
+ATT_RELEASE_BED = 'release_bed'
 
 ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform', 'choice']
 
