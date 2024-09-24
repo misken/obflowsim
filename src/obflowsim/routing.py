@@ -6,7 +6,7 @@ import pandas as pd
 import networkx as nx
 from networkx import DiGraph
 
-from obflowsim.obconstants import UnitName
+from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
 from obflowsim.los import create_los_partial, los_mean
 
 
@@ -60,6 +60,10 @@ class StaticRouter(Router):
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
 
+                if 'edge_num' in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {'edge_num': edge['edge_num']}})
+
                 if 'los' in edge:
                     edge['los_mean'] = los_mean(edge['los'], los_params)
 
@@ -68,6 +72,21 @@ class StaticRouter(Router):
 
                     nx.set_edge_attributes(route_graph, {
                         (edge['from'], edge['to']): {'los_mean': edge['los_mean']}})
+
+                # Add get and keep bed attributes
+                if ATT_GET_BED in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_GET_BED: edge[ATT_GET_BED]}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_GET_BED: DEFAULT_GET_BED}})
+
+                if ATT_RELEASE_BED in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_RELEASE_BED: edge[ATT_RELEASE_BED]}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {ATT_RELEASE_BED: DEFAULT_RELEASE_BED}})
 
                 # Add blocking adjustment attribute
                 if 'blocking_adjustment' in edge:
@@ -114,6 +133,8 @@ class StaticRouter(Router):
 
         """
         # TODO: Implement route validation rules
+
+        # For example, all beds must eventually be released and can't keep bed if dest is EXIT
         return True
 
     def create_route(self, patient) -> DiGraph:
@@ -169,28 +190,17 @@ class StaticRouter(Router):
         G = patient.route_graph
 
         # Find all possible next units
-        if patient.current_stop_num > 0:
-            current_unit_name = patient.unit_stops[patient.current_stop_num]
+        current_unit_name = patient.get_current_unit_name()
+        if current_unit_name == UnitName.ENTRY:
+            next_edge_num = 1
         else:
-            current_unit_name = UnitName.ENTRY
+            current_route_edge = patient.get_current_route_edge()
+            next_edge_num = current_route_edge['edge_num'] + 1
 
-        successors = [n for n in G.successors(current_unit_name)]
-        next_unit_name = successors[0]
+        # Get all the edges out of current node whose edge_num is one more than current edge_num
+        # For static routes, this should be a single edge.
+        next_edges = [(u, v, d) for (u, v, d) in G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
+        next_unit_name = next_edges[0][1]
 
-        # if next_unit_name is None:
-        #     if patient.current_stop_num == patient.route_length:
-        #         # Patient is at last stop
-        #         pass
-        #     else:
-        #         logging.error(
-        #             f"{self.env.now:.4f}: {patient.patient_id} has no next unit at {current_unit_name}.")
-        #     exit(1)
-        #
-        # else:
-        #     if next_unit_name == UnitName.EXIT:
-        #         next_unit_name = None
-        #
-        # logging.debug(
-        #     f"{self.env.now:.4f}: {patient.patient_id} current_unit_name {current_unit_name}, next_unit_name {next_unit_name}")
 
         return next_unit_name
