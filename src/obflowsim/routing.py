@@ -60,6 +60,10 @@ class StaticRouter(Router):
             for edge in route['edges']:
                 route_graph.add_edge(edge['from'], edge['to'])
 
+                if 'edge_num' in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (edge['from'], edge['to']): {'edge_num': edge['edge_num']}})
+
                 if 'los' in edge:
                     edge['los_mean'] = los_mean(edge['los'], los_params)
 
@@ -186,28 +190,17 @@ class StaticRouter(Router):
         G = patient.route_graph
 
         # Find all possible next units
-        if patient.current_stop_num > 0:
-            current_unit_name = patient.unit_stops[patient.current_stop_num]
+        current_unit_name = patient.get_current_unit_name()
+        if current_unit_name == UnitName.ENTRY:
+            next_edge_num = 1
         else:
-            current_unit_name = UnitName.ENTRY
+            current_route_edge = patient.get_current_route_edge()
+            next_edge_num = current_route_edge['edge_num'] + 1
 
-        successors = [n for n in G.successors(current_unit_name)]
-        next_unit_name = successors[0]
+        # Get all the edges out of current node whose edge_num is one more than current edge_num
+        # For static routes, this should be a single edge.
+        next_edges = [(u, v, d) for (u, v, d) in G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
+        next_unit_name = next_edges[0][1]
 
-        # if next_unit_name is None:
-        #     if patient.current_stop_num == patient.route_length:
-        #         # Patient is at last stop
-        #         pass
-        #     else:
-        #         logging.error(
-        #             f"{self.env.now:.4f}: {patient.patient_id} has no next unit at {current_unit_name}.")
-        #     exit(1)
-        #
-        # else:
-        #     if next_unit_name == UnitName.EXIT:
-        #         next_unit_name = None
-        #
-        # logging.debug(
-        #     f"{self.env.now:.4f}: {patient.patient_id} current_unit_name {current_unit_name}, next_unit_name {next_unit_name}")
 
         return next_unit_name

@@ -104,24 +104,6 @@ class Patient:
         # Get route
         self.route_graph = self.pfs.router.create_route(self)
 
-        # Since we have fixed route, just initialize full list to hold bed requests
-        # The index numbers are stop numbers and so slot 0 is for ENTRY location
-        # TODO: Should we start with empty lists and append as we go?
-        # Starting with empty lists sets us up for dynamic routing and also
-        # might help avoid referencing elements in the patient path future.
-        # route_length = self.get_route_length_nodes()
-        # self.bed_requests = [None for _ in range(route_length)] # simpy request() events
-        # self.unit_stops = [None for _ in range(route_length)] # unit name
-        # self.planned_los = [None for _ in range(route_length)]
-        # self.adjusted_los = [None for _ in range(route_length)]
-        # self.request_entry_ts = [None for _ in range(route_length)]
-        # self.entry_ts = [None for _ in range(route_length)]
-        # self.wait_to_enter = [None for _ in range(route_length)]
-        # self.request_exit_ts = [None for _ in range(route_length)]
-        # self.exit_ts = [None for _ in range(route_length)]
-        # self.wait_to_exit = [None for _ in range(route_length)]
-        # self.system_exit_ts = None
-
         self.bed_requests = {}  # simpy request() events with unit name as keys
         self.unit_stops = []  # unit name
         self.planned_los = []
@@ -147,6 +129,54 @@ class Patient:
         int: number of nodes
         """
         return len(self.route_graph.edges) + 1
+
+    def get_previous_unit_name(self):
+
+        # If this is first stop, previous unit was Entry node
+        if self.current_stop_num == 1:
+            previous_unit_name = UnitName.ENTRY.value
+        else:  # Not the first stop
+            previous_unit_name = self.unit_stops[self.current_stop_num - 1]
+
+        return previous_unit_name
+
+    def get_previous_unit(self):
+
+        # If this is first stop, previous unit was Entry node
+        if self.current_stop_num == 1:
+            previous_unit = self.pfs.entry
+        else:  # Not the first stop
+            previous_unit_name = self.get_previous_unit_name()
+            previous_unit = self.pfs.patient_care_units[previous_unit_name]
+
+        return previous_unit
+
+    def get_current_unit_name(self):
+
+        current_unit_name = self.unit_stops[self.current_stop_num]
+        return current_unit_name
+
+    def get_current_unit(self):
+
+        current_unit_name = self.get_current_unit_name()
+        current_unit = self.pfs.patient_care_units[current_unit_name]
+        return current_unit
+
+    def get_current_route_edge(self):
+        """
+        Get edge containing current unit as destination node.
+
+        Returns
+        -------
+        `edge`
+
+        """
+
+        previous_unit_name = self.get_previous_unit_name()
+        current_unit_name = self.get_current_unit_name()
+        current_route_edge = self.route_graph.edges[previous_unit_name, current_unit_name]
+
+        return current_route_edge
 
     def assign_patient_type(self):
         arr_stream_rg = self.pfs.config.rg['arrivals']
@@ -415,22 +445,15 @@ class PatientCareUnit:
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} trying to get {self.name} for stop_num {patient.current_stop_num}")
 
-        # If this is first stop, previous unit was Entry node
-        if patient.current_stop_num == 1:
-            previous_unit_name = UnitName.ENTRY.value
-            previous_unit = pfs.entry
-        else:  # Not the first stop
-            previous_unit_name = patient.unit_stops[csn - 1]
-            previous_unit = pfs.patient_care_units[previous_unit_name]
+        previous_unit_name = patient.get_previous_unit_name()
+        previous_unit = patient.get_previous_unit()
+        current_route_edge = patient.get_current_route_edge()
 
         # Whether or not we keep the bed, we are trying to leave a unit to visit another unit (or exit)
         patient.request_exit_ts[csn - 1] = self.env.now
 
-        current_route_edge = patient.route_graph.edges[previous_unit_name, current_unit_name]
-
         # Request bed if indicated
         if current_route_edge[ATT_GET_BED]:
-            #bed_request_ts = self.env.now
             # Request a bed
             bed_request = self.unit.request()
             # Store bed request and timestamp in patient's request lists

@@ -1,8 +1,8 @@
 scenario: test_ldrp
 run_settings:
-  num_replications: 2
-  run_time: 9960
-  warmup_time: 1200
+  num_replications: 1
+  run_time: 8760
+  warmup_time: 0
   
   # Uncomment the following to use max_arrivals as additional or alternate stopping condition
   # max_arrivals = 1000
@@ -114,6 +114,7 @@ routes:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
+      edge_num: 1
       # This is the default
       get_bed: 1  
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
@@ -122,32 +123,38 @@ routes:
     - id: OBS_LDRP
       from: OBS
       to: LDRP
+      edge_num: 2
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_noc / num_erlang_stages_ldrp)
       blocking_adjustment: delay
       discharge_adjustment: ./input/discharge_pdf.txt
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
+      edge_num: 3
   RAND_SPONT_CSECT:
     edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
+      edge_num: 1
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
     - id: OBS_LDRP
       from: OBS
       to: LDRP
+      edge_num: 2
       los: gamma(num_erlang_stages_labor_c, mean_los_labor_c / num_erlang_stages_labor_c)
       blocking_adjustment: delay
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
+      edge_num: 3
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
       # Keep slot in LDRP while visiting CSECT
       release_bed: 0
     - id: CSECT_LDRP
       from: CSECT
       to: LDRP
+      edge_num: 4
       # Do NOT get another LDRP bed
       get_bed: 0
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_c / num_erlang_stages_ldrp)
@@ -155,6 +162,7 @@ routes:
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
+      edge_num: 5
   RAND_AUG_NAT:
     edges:
     - id: ENTRY_OBS
