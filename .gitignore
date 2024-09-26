@@ -18,6 +18,7 @@ notebooks/output/
 notebooks/input/
 tests/input/.virtual_documents/
 docs/devnotes/*.pdf
+docs/devnotes/images/
 
-
-
+.virtual_documents
+refs/
