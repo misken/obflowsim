@@ -28,7 +28,7 @@ class Router(ABC):
         pass
 
     @abstractmethod
-    def get_next_stop(self, entity):
+    def get_next_step(self, entity):
         pass
 
 
@@ -171,18 +171,19 @@ class StaticRouter(Router):
 
         return route_graph
 
-    def get_next_stop(self, patient):
+    def get_next_step(self, patient, after=None):
         """
-        Get next unit in route
+        Get next step (edge) in route
 
         Parameters
         ----------
         patient: Patient
+        after: Edge
 
         Returns
         -------
-        str
-            Unit names are used as node id's
+        Edge
+
 
         """
 
@@ -194,13 +195,16 @@ class StaticRouter(Router):
         if current_unit_name == UnitName.ENTRY:
             next_edge_num = 1
         else:
-            current_route_edge = patient.get_current_route_edge()
+            if after is None:
+                current_route_edge = patient.get_current_route_edge()
+            else:
+                current_route_edge = after
+
             next_edge_num = current_route_edge['edge_num'] + 1
 
         # Get all the edges out of current node whose edge_num is one more than current edge_num
         # For static routes, this should be a single edge.
-        next_edges = [(u, v, d) for (u, v, d) in G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
-        next_unit_name = next_edges[0][1]
+        next_edges = [(u, v, d) for (u, v, d) in
+                      G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
 
-
-        return next_unit_name
+        return next_edges[0]
