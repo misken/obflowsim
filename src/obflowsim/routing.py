@@ -171,7 +171,7 @@ class StaticRouter(Router):
 
         return route_graph
 
-    def get_next_step(self, patient, after=None):
+    def get_next_step(self, patient, after=None, unit=None):
         """
         Get next step (edge) in route
 
@@ -187,20 +187,28 @@ class StaticRouter(Router):
 
         """
 
+        try:
+            (after is None and unit is None) or (after is not None and unit is not None)
+        except ValueError:
+            raise ValueError('Both after and unit must be None or both must not be None')
+
         # Get this patient's route graph
         G = patient.route_graph
 
         # Find all possible next units
-        current_unit_name = patient.get_current_unit_name()
-        if current_unit_name == UnitName.ENTRY:
-            next_edge_num = 1
+        if unit is None:
+            current_unit_name = patient.get_current_unit_name()
         else:
-            if after is None:
-                current_route_edge = patient.get_current_route_edge()
-            else:
-                current_route_edge = after
+            current_unit_name = unit
 
-            next_edge_num = current_route_edge['edge_num'] + 1
+        if after is None:
+            if current_unit_name == UnitName.ENTRY:
+                next_edge_num = 1
+            else:
+                current_route_edge = patient.get_current_route_edge()
+                next_edge_num = current_route_edge['edge_num'] + 1
+        else:
+            next_edge_num = after + 1
 
         # Get all the edges out of current node whose edge_num is one more than current edge_num
         # For static routes, this should be a single edge.
