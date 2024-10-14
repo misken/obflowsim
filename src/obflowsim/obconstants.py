@@ -1,6 +1,10 @@
 from enum import Enum, StrEnum
 import simpy
 
+# Debugging
+MARKED_PATIENT = 'spont_labor_19'
+
+# Defaults for key parameters
 DEFAULT_BASE_TIME_UNIT = 'h'
 DEFAULT_START_DATE = '2024-01-01'
 DEFAULT_USE_CALENDAR_TIME = 1
