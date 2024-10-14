@@ -480,9 +480,12 @@ class PatientCareUnit:
             print(f'Patient {patient.patient_id} has invalid incoming route edge.')
 
         if patient.skipped_edge[patient.current_stop_num] is None:
+            skipped_unit_name = None
+            blocked_unit_name = None
             incoming_route_edge = (current_unit_name, next_unit_name, patient.route_graph.edges[current_unit_name, next_unit_name])
         else:
             skipped_unit_name = patient.skipped_edge[patient.current_stop_num][1]
+            blocked_unit_name = current_unit_name
             incoming_route_edge = (skipped_unit_name, next_unit_name,
                                    patient.route_graph.edges[skipped_unit_name, next_unit_name])
 
@@ -596,6 +599,10 @@ class PatientCareUnit:
                 previous_unit.unit.release(patient.bed_requests[previous_unit_name])
                 # What happens to the reference in patient.bed_requests[]?
                 unit_released = patient.bed_requests.pop(previous_unit_name)
+            elif blocked_unit_name is not None and blocked_unit_name != UnitName.ENTRY.value:
+                pfs.patient_care_units[blocked_unit_name].unit.release(patient.bed_requests[blocked_unit_name])
+                unit_released = patient.bed_requests.pop(blocked_unit_name)
+
 
             logging.debug(f"{self.env.now:.4f}: {patient.patient_id} entering {self.name} at {self.env.now}")
 
