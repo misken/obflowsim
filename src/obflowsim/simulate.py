@@ -186,9 +186,20 @@ class Patient:
 
         """
 
-        previous_unit_name = self.get_previous_unit_name()
+        if self.patient_id == MARKED_PATIENT:
+            pass
+
+        if self.skipped_edge[self.current_stop_num - 1] is None:
+            previous_unit_name = self.get_previous_unit_name()
+        else:
+            previous_unit_name = self.skipped_edge[self.current_stop_num - 1][1]
+
         current_unit_name = self.get_current_unit_name()
-        current_route_edge = self.route_graph.edges[previous_unit_name, current_unit_name]
+        try:
+            current_route_edge = self.route_graph.edges[previous_unit_name, current_unit_name]
+        except KeyError:
+            print(f'patient {self.patient_id} has no arc from {previous_unit_name} to {current_unit_name}')
+            current_route_edge = None
 
         return current_route_edge
 
@@ -311,6 +322,7 @@ class EntryNode:
         # Determine first stop in route and try to get a bed in that unit
         next_step = patient.pfs.router.get_next_step(patient)
         next_unit_name = next_step[1]
+        patient.request_exit_ts[csn] = self.env.now
         self.env.process(obsystem.patient_care_units[next_unit_name].put(patient, obsystem))
 
     def inc_occ(self, increment=1):
@@ -462,7 +474,7 @@ class PatientCareUnit:
 
         # TODO: data structure for tracking patient progress through system
 
-        patient.request_exit_ts[patient.current_stop_num] = self.env.now
+
         # TODO: Should I append to the patient flow lists now or wait until I get into next unit?
         # patient.append_empty_unit_stop()  # Appends None to all patient flow related lists
 
@@ -506,9 +518,13 @@ class PatientCareUnit:
             # Check if we got a bed before our los has elapsed
             if bed_request in get_bed:
                 got_bed = True  # Good to continue processing at this patient care unit
+                if patient.patient_id == MARKED_PATIENT:
+                    pass
             else:
                 # Our LOS has elapsed while we were blocked trying to enter ths unit.
                 # Need to get rid of last bed request
+                if patient.patient_id == MARKED_PATIENT:
+                    pass
                 patient.bed_requests.pop(self.name)
                 # Determine next stop in route
                 current_edge_num = incoming_route_edge[2]['edge_num']
@@ -572,7 +588,6 @@ class PatientCareUnit:
             else:
                 patient.blocked[csn] = 0
 
-
             # Update unit attributes
             self.num_entries += 1
             self.last_entry_ts = self.env.now
@@ -626,6 +641,7 @@ class PatientCareUnit:
 
             if next_unit_name != UnitName.EXIT:
                 # Try to get bed in next unit
+                patient.request_exit_ts[patient.current_stop_num] = self.env.now
                 self.env.process(pfs.patient_care_units[next_unit_name].put(patient, pfs))
             else:
                 # Patient is ready to exit system

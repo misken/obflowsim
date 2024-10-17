@@ -2,7 +2,7 @@ from enum import Enum, StrEnum
 import simpy
 
 # Debugging
-MARKED_PATIENT = 'spont_labor_19'
+MARKED_PATIENT = 'sched_induced_labor_10'
 
 # Defaults for key parameters
 DEFAULT_BASE_TIME_UNIT = 'h'
