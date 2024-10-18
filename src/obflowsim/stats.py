@@ -24,7 +24,7 @@ from obflowsim.clock_tools import to_sim_datetime
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from obflowsim.simulate import PatientFlowSystem
+    from obflowsim.patient_flow_system import PatientFlowSystem
     from obflowsim.config import Config
 
 

@@ -8,7 +8,7 @@ import networkx as nx
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from obflowsim.config import Config
-    from obflowsim.simulate import PatientFlowSystem
+    from obflowsim.patient_flow_system import PatientFlowSystem
 
 from obflowsim.obconstants import PatientType
 from obflowsim.obconstants import BASE_TIME_UNITS_PER_YEAR

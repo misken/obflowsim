@@ -2,6 +2,7 @@ import pytest
 import simpy
 from numpy.random import default_rng
 
+import obflowsim.arrivals
 import obflowsim.simulate as obf
 from obflowsim.obconstants import ArrivalType, PatientType, UnitName
 
@@ -23,8 +24,8 @@ class TestStopConditions:
         seed = 271
         rg = default_rng(seed)
 
-        arrival_generator = obf.PatientPoissonArrivals(env, arrival_type, arrival_rate, rg,
-                                                       max_arrivals=max_arrivals)
+        arrival_generator = obflowsim.arrivals.PatientPoissonArrivals(env, arrival_type, arrival_rate, rg,
+                                                                      max_arrivals=max_arrivals)
         env.run()
         assert arrival_generator.num_patients_created == max_arrivals
 
@@ -43,8 +44,8 @@ class TestStopConditions:
         seed = 271
         rg = default_rng(seed)
 
-        arrival_generator = obf.PatientPoissonArrivals(env, arrival_type, arrival_rate, rg,
-                                                       stop_time=stop_time)
+        arrival_generator = obflowsim.arrivals.PatientPoissonArrivals(env, arrival_type, arrival_rate, rg,
+                                                                      stop_time=stop_time)
         env.run()
         assert arrival_generator.env.now >= stop_time
 
