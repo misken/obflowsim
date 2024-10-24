@@ -85,10 +85,7 @@ class Patient:
         if self.current_stop_num == 1:
             previous_unit_name = UnitName.ENTRY.value
         else:  # Not the first stop
-            if self.skipped_edge[self.current_stop_num - 1] is None:
-                previous_unit_name = self.unit_stops[self.current_stop_num - 1]
-            else:
-                previous_unit_name = self.skipped_edge[self.current_stop_num - 1][1]
+            previous_unit_name = self.unit_stops[self.current_stop_num - 1]
 
         return previous_unit_name
 

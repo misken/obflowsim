@@ -46,6 +46,7 @@ def create_scheduled_generators(env, config: Config, obsystem: PatientFlowSystem
 
     return patient_generators_scheduled
 
+
 class PatientPoissonArrivals:
     """ Generates patients according to a stationary Poisson process with specified rate.
 
@@ -102,7 +103,7 @@ class PatientPoissonArrivals:
             yield self.env.timeout(iat)
             self.num_patients_created += 1
 
-            new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
+            new_entity_id = create_patient_id(self.arrival_stream_uid, self.num_patients_created)
 
             if self.patient_flow_system is not None:
                 new_patient = Patient(new_entity_id, self.arrival_stream_uid,
@@ -159,7 +160,7 @@ class PatientGeneratorWeeklyStaticSchedule:
             for (time_of_week, num_sched) in self.schedule:
                 for patient in range(num_sched):
                     self.num_patients_created += 1
-                    new_entity_id = f'{self.arrival_stream_uid}_{self.num_patients_created}'
+                    new_entity_id = create_patient_id(self.arrival_stream_uid, self.num_patients_created)
 
                     # Generate new patient
                     if self.patient_flow_system is not None:
@@ -171,3 +172,7 @@ class PatientGeneratorWeeklyStaticSchedule:
 
             # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)
+
+
+def create_patient_id(arrival_stream_uid: str, num_patients_created: int):
+    return f'{arrival_stream_uid}_{num_patients_created:04}'
