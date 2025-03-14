@@ -1,0 +1,287 @@
+scenario: ldrp_pp_base_v2
+run_settings:
+  num_replications: 2
+  run_time: 9960
+  warmup_time: 1200
+  
+  # Uncomment the following to use max_arrivals as additional or alternate stopping condition
+  # max_arrivals = 1000
+  
+  # h = hours
+  base_time_unit: h
+  
+  # Comment out start_date line to use default of 2024-01-01
+  # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
+  # use_calendar_time = 1 for yes, 0 for no
+  use_calendar_time: 1
+  start_date: 2024-01-01
+  
+ 
+outputs:
+  occ_logs:
+    path: ./output/logs
+    write: 1
+  occ_stats:
+    path: ./output/stats
+    write: 1
+  stop_logs:
+    path: ./output/logs
+    write: 1
+  visit_logs:
+    path: ./output/logs
+    write: 1
+  summary_stats:
+    path: ./output/stats
+    write: 1
+
+# Use toggles to turn random arrival streams on and off   
+rand_arrival_rates:
+    spont_labor: 0.20
+    urgent_induced_labor: 0.00
+    non_delivery_ldr: 0.05
+    non_delivery_pp: 0.05
+
+# 1=on, 0=off    
+rand_arrival_toggles:
+    spont_labor: 1
+    urgent_induced_labor: 0
+    non_delivery_ldr: 1
+    non_delivery_pp: 1
+
+# Use toggles to turn scheduled arrival streams on and off   
+schedule_files:
+    sched_csect: ./input/sched_c_long.txt
+    sched_induced_labor: ./input/sched_induction_long.txt
+
+# 1=on, 0=off    
+sched_arrival_toggles:
+    sched_csect: 1
+    sched_induced_labor: 1
+
+branching_probabilities:
+    pct_spont_labor_aug: 0.4
+    pct_spont_labor_to_c: 0.2
+    pct_aug_labor_to_c: 0.06
+    pct_sched_ind_to_c: 0.12
+    pct_urg_ind_to_c: 0.12
+    
+# Comment out following line if you don't want to use time of day discharge patterns
+# discharge_pattern_file: ./input/discharge_cdf.txt
+
+# You can define input parameters to be used in los_distributions section
+los_params:
+    mean_los_csect: 1.0
+    mean_los_obs: 2.4
+    mean_los_ldrp_nat: 48.0
+    mean_los_ldrp_aug_nat: 60.0
+    mean_los_ldrp_aug_c: 20.0
+    mean_los_ldrp_ind_nat: 60.0
+    mean_los_ldrp_ind_c: 20.0
+    mean_los_ldrp_c: 20.0
+    mean_los_pp_c: 48.0
+    mean_los_ldrp_nat: 48.0
+    mean_los_ldr_nondelivery: 36.0
+    mean_los_pp_nondelivery: 48.0
+    num_erlang_stages_csect: 4
+    num_erlang_stages_obs: 1
+    num_erlang_stages_labor_c: 2
+    num_erlang_stages_ldrp: 8
+    num_erlang_stages_pp_c: 4
+    num_erlang_stages_ldr_nondelivery: 2
+    num_erlang_stages_pp_nondelivery: 4
+
+
+
+locations:
+  OBS:
+    capacity: 10
+  LDRP:
+    capacity: 25
+  PP:
+    capacity: 10
+  CSECT:
+    capacity: 6
+
+
+random_number_streams:
+  arrivals: 27568
+  los: 31249
+  
+
+
+# In this scenario, patients who labor in LDRP and then need a C-section, do NOT return to the
+# LDRP. Instead they go to a PP bed.
+
+network:
+   edges:
+    - id: ENTRY_OBS
+      from: ENTRY
+      to: OBS
+      get_new_bed: true  
+      
+    - id: ENTRY_LDRP
+      from: ENTRY
+      to: LDRP
+      get_new_bed: true  
+
+    - id: ENTRY_CSECT
+      from: ENTRY
+      to: CSECT
+      get_new_bed: false
+      
+    - id: ENTRY_PP
+      from: ENTRY
+      to: PP
+      get_new_bed: false
+        
+    - id: OBS_LDRP
+      from: OBS
+      to: LDRP
+      get_new_bed: true
+      release_old_bed: true
+      blocking_adjustment: delay
+      
+    - id: LDRP_EXIT
+      from: LDRP
+      to: EXIT
+      release_old_bed: true
+      discharge_adjustment: ./input/discharge_pdf.txt
+      
+    - id: LDRP_PP
+      from: LDRP
+      to: PP
+      release_old_bed: true
+      get_new_bed: true
+      
+    - id: LDRP_CSECT
+      from: LDRP
+      to: CSECT
+      release_old_bed: true
+      get_new_bed: false
+
+    - id: CSECT_PP
+      from: CSECT
+      to: PP
+      release_old_bed: false
+      get_new_bed: true
+     
+    - id: PP_EXIT
+      from: PP
+      to: EXIT
+      release_old_bed: true
+      discharge_adjustment: ./input/discharge_pdf.txt
+
+# For the los attribute, you can use a restricted set of numpy distributions parameterized via
+# constants that are user defined parameters in the los_params section. Eventually this will
+# be extended to allow summations of these allowable numpy distributions.
+
+routes:
+  RAND_SPONT_NAT:
+    edges:
+    - id: ENTRY_OBS 
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_nat / num_erlang_stages_ldrp)
+      # Need to implement parser to handle summation of distributions
+
+    - id: LDRP_EXIT
+
+  RAND_SPONT_CSECT:
+    edges:
+    - id: ENTRY_OBS
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_c / num_erlang_stages_labor_c)
+      
+    - id: LDRP_CSECT
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      
+    - id: CSECT_PP
+      los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
+      
+    - id: PP_EXIT
+
+  RAND_AUG_NAT:
+    edges:
+    - id: ENTRY_OBS 
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_aug_nat / num_erlang_stages_ldrp)
+
+    - id: LDRP_EXIT
+    
+  RAND_AUG_CSECT:
+    edges:
+    - id: ENTRY_OBS
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_aug_c / num_erlang_stages_labor_c)
+      
+    - id: LDRP_CSECT
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      
+    - id: CSECT_PP
+      los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
+      
+    - id: PP_EXIT
+    
+  SCHED_CSECT:
+    edges:
+    - id: ENTRY_CSECT
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      
+    - id: CSECT_PP
+      los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+
+    - id: PP_EXIT
+      from: PP
+      
+  SCHED_IND_NAT:
+    edges:
+    - id: ENTRY_OBS 
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_ind_nat / num_erlang_stages_ldrp)
+
+    - id: LDRP_EXIT
+      
+  SCHED_IND_CSECT:
+    edges:
+    - id: ENTRY_OBS
+      los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
+    - id: OBS_LDRP
+      los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_ind_c / num_erlang_stages_labor_c)
+      
+    - id: LDRP_CSECT
+      los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      
+    - id: CSECT_PP
+      los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
+      
+    - id: PP_EXIT
+    
+  RAND_NONDELIV_LDR:
+    edges:
+    - id: ENTRY_LDRP
+      los: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
+      
+    - id: LDRP_EXIT
+
+      
+  RAND_NONDELIV_PP:
+    edges:
+    - id: ENTRY_PP
+      los: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
+
+    - id: PP_EXIT
+
+    
+    
+
+
