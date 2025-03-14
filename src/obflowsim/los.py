@@ -156,17 +156,20 @@ def los_mean(raw_los_dist_input: str, los_params: Dict):
     los_params_sorted = [key for key in los_params]
     los_params_sorted.sort(key=len, reverse=True)
 
-    los_dist_str = raw_los_dist_input
-    for param in los_params_sorted:
-        los_dist_str = los_dist_str.replace(param, str(los_params[param]))
+    try:
+        _los_mean = float(raw_los_dist_input)
+    except:
+        los_dist_str = raw_los_dist_input
+        for param in los_params_sorted:
+            los_dist_str = los_dist_str.replace(param, str(los_params[param]))
 
-    func_name = _convert_str_to_func_name(los_dist_str)
+        func_name = _convert_str_to_func_name(los_dist_str)
 
-    if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
-        args, kwargs = _convert_str_to_args_and_kwargs(los_dist_str)
-        _los_mean = mean_from_dist_params(func_name, args, kwargs)
-    else:
-        raise NameError(f"The use of '{func_name}' is not allowed")
+        if func_name in obconstants.ALLOWED_LOS_DIST_LIST:
+            args, kwargs = _convert_str_to_args_and_kwargs(los_dist_str)
+            _los_mean = mean_from_dist_params(func_name, args, kwargs)
+        else:
+            raise NameError(f"The use of '{func_name}' is not allowed")
 
     return _los_mean
 

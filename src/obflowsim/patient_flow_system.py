@@ -7,12 +7,16 @@ from typing import (
 import pandas as pd
 import simpy
 from simpy import Environment
+import networkx as nx
+from networkx import DiGraph
 
 
 from obflowsim.clock_tools import SimCalendar
 from obflowsim.config import Config
-from obflowsim.obconstants import UnitName, MARKED_PATIENT, ATT_GET_BED, ATT_RELEASE_BED
+from obflowsim.obconstants import UnitName, MARKED_PATIENT
 from obflowsim.patient import Patient
+from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
+from obflowsim.los import los_mean
 
 
 class PatientFlowSystem:
@@ -39,8 +43,72 @@ class PatientFlowSystem:
         for location, data in config.locations.items():
             self.patient_care_units[location] = PatientCareUnit(env, name=location, capacity=data['capacity'])
 
+        self.network = self.create_network_graph(config)
+
         # Create list to hold timestamps dictionaries (one per patient stop)
         self.stops_timestamps_list = []
+
+    def create_network_graph(self, config):
+
+        pfs_graph = nx.DiGraph()
+        for edge in self.config.network['edges']:
+
+            # Add edges connecting patient care units
+            pfs_graph.add_edge(edge['from'], edge['to'])
+
+            # Set edge attributes
+            if 'id' in edge:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'id': edge['id']}})
+            else:
+                # Default edge name
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'id': f"{edge['from']}_{edge['to']}"}})
+
+            if 'los' in edge:
+                edge['los_mean'] = los_mean(edge['los'], config.los_params)
+
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'los': edge['los']}})
+
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'los_mean': edge['los_mean']}})
+
+            # Add get and keep bed attributes
+            if ATT_GET_BED in edge:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {ATT_GET_BED: edge[ATT_GET_BED]}})
+            else:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {ATT_GET_BED: DEFAULT_GET_BED}})
+
+            if ATT_RELEASE_BED in edge:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {ATT_RELEASE_BED: edge[ATT_RELEASE_BED]}})
+            else:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {ATT_RELEASE_BED: DEFAULT_RELEASE_BED}})
+
+            # Add blocking adjustment attribute
+            if 'blocking_adjustment' in edge:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'blocking_adjustment': edge['blocking_adjustment']}})
+            else:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'blocking_adjustment': None}})
+
+            # Add discharge timing adjustment attribute
+            if 'discharge_adjustment' in edge:
+                discharge_pmf_file = edge['discharge_adjustment']
+                discharge_pmf = pd.read_csv(discharge_pmf_file, sep='\s+', header=None, names=['x', 'p'])
+                discharge_pmf.set_index('x', inplace=True, drop=True)
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'discharge_adjustment': discharge_pmf}})
+            else:
+                nx.set_edge_attributes(pfs_graph, {
+                    (edge['from'], edge['to']): {'discharge_adjustment': None}})
+
+        return pfs_graph
 
 
 class EntryNode:
@@ -86,8 +154,8 @@ class EntryNode:
         self.inc_occ()
 
         # Update patient attributes
-        patient.current_stop_num = 0
-        csn = patient.current_stop_num
+        csn = 0
+        patient.current_stop_num = csn
         patient.append_empty_unit_stop()
         patient.unit_stops[csn] = UnitName.ENTRY.value
         patient.request_entry_ts[csn] = self.env.now
@@ -101,7 +169,7 @@ class EntryNode:
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} ready to leave {self.name} node.")
 
-        # Determine first stop in route and try to get a bed in that unit
+        # Determine first arc in route and try to get a bed in that unit
         next_step = patient.pfs.router.get_next_step(patient)
         next_unit_name = next_step[1]
         patient.request_exit_ts[csn] = self.env.now
@@ -124,8 +192,6 @@ class EntryNode:
 class ExitNode:
     """
      All patients end at this node. It is the last stop in all routes.
-
-
      """
 
     def __init__(self, env: Environment, name: str = UnitName.EXIT):
@@ -256,17 +322,13 @@ class PatientCareUnit:
 
         request_entry_ts = self.env.now   # Note the current time we tried to enter this unit
         exiting_unit_name = patient.get_current_unit_name()  # Unit we are in right now while trying to enter this unit
-        exiting_unit = patient.get_current_unit()
+        exiting_unit = patient.get_current_unit()         #   patient.get_current_unit()
         entering_unit_name = self.name
-        got_bed = False
-
-        # This is the arc terminating at ths unit
-        try:
-            assert exiting_unit_name != entering_unit_name
-        except AssertionError:
-            print(f'Patient {patient.patient_id} has invalid incoming route edge.')
+        got_new_bed = False
 
         # Get route edge terminating at this unit. Account for any edges skipped due to extended blocking.
+        # TODO: Review this logic in light of router changes. Consider namedtuple for incoming route edge
+        # TODO: get_next_step() logic is also not working
         if patient.skipped_edge[patient.current_stop_num] is None:
             skipped_unit_name = None
             blocked_unit_name = None
@@ -297,7 +359,7 @@ class PatientCareUnit:
                 if patient.patient_id == MARKED_PATIENT:
                     pass
 
-                got_bed = True  # Good to continue processing at this patient care unit
+                got_new_bed = True  # Good to continue processing at this patient care unit
             else:  # Our LOS has elapsed while we were blocked trying to enter this unit.
                 # Need to get rid of last bed request as we'll never enter this unit.
                 # Also need to cancel the reqeust
@@ -344,7 +406,7 @@ class PatientCareUnit:
                     # Send patient to Exit node
                     pfs.exit.put(patient, pfs)
 
-        if got_bed or not incoming_route_edge[2][ATT_GET_BED]:  # Seized a bed if needed.
+        if got_new_bed or not incoming_route_edge[2][ATT_GET_BED]:  # Seized a bed if needed.
 
             if patient.patient_id == MARKED_PATIENT:
                 pass
@@ -518,6 +580,7 @@ class PatientCareUnit:
         try:
             discharge_pdf = G[previous_unit_name][self.name]['discharge_adjustment']
         except KeyError:
+            discharge_pdf = None
             print(f'key error for {patient.patient_id}')
 
         if discharge_pdf is not None:

@@ -13,21 +13,6 @@ from obflowsim.los import create_los_partial, los_mean
 class Router(ABC):
 
     @abstractmethod
-    def validate_route_graph(self, route_graph: DiGraph) -> bool:
-        """
-        Determine if a route is considered valid
-
-        Parameters
-        ----------
-        route_graph
-
-        Returns
-        -------
-        True if route is valid
-        """
-        pass
-
-    @abstractmethod
     def get_next_step(self, entity):
         pass
 
@@ -40,76 +25,83 @@ class StaticRouter(Router):
         Parameters
         ----------
         env: Environment
-        pfs: PatientFlowSystem
+        pfs: PatientFlowSystem - need access to patient flow network
         """
 
         self.env = env
         self.patient_flow_system = pfs
-
 
         # Dict of networkx DiGraph objects
         self.route_graphs = {}
 
         los_params = pfs.config.los_params
 
-        # Create route templates from routes list (of unit numbers)
+        # Create route templates from routes list
         for route_name, route in self.patient_flow_system.config.routes.items():
             route_graph = nx.DiGraph()
 
             # Add edges - simple serial route in this case
             for edge in route['edges']:
-                route_graph.add_edge(edge['from'], edge['to'])
+                # Find the edge in the pfs network
+                network_edge = [(u,v,d) for u,v,d in pfs.network.edges(data=True) if d['id'] == edge['id']][0]
 
-                if 'edge_num' in edge:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'edge_num': edge['edge_num']}})
+                route_graph.add_edge(network_edge[0], network_edge[1])
 
-                if 'los' in edge:
-                    edge['los_mean'] = los_mean(edge['los'], los_params)
+                # if 'edge_num' in network_edge:
+                #     nx.set_edge_attributes(route_graph, {
+                #         (network_edge[0], network_edge[1]): {'edge_num': edge['edge_num']}})
 
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'los': edge['los']}})
+                if 'los' in network_edge and 'los' not in edge:
+                    edge_los_mean = los_mean(network_edge['los'], los_params)
+                    los = network_edge['los']
+                elif 'los' in edge:
+                    edge_los_mean = los_mean(edge['los'], los_params)
+                    los = edge['los']
+                else:
+                    edge_los_mean = 0.0
+                    los = '0.0'
 
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'los_mean': edge['los_mean']}})
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {'los': los}})
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {'los_mean': edge_los_mean}})
 
                 # Add get and keep bed attributes
-                if ATT_GET_BED in edge:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {ATT_GET_BED: edge[ATT_GET_BED]}})
+                if ATT_GET_BED in network_edge and ATT_GET_BED not in edge:
+                    att_get_bed = network_edge[ATT_GET_BED]
+                elif ATT_GET_BED in edge:
+                    att_get_bed = edge[ATT_GET_BED]
                 else:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {ATT_GET_BED: DEFAULT_GET_BED}})
+                    att_get_bed =  DEFAULT_GET_BED
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {ATT_GET_BED: att_get_bed}})
 
-                if ATT_RELEASE_BED in edge:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {ATT_RELEASE_BED: edge[ATT_RELEASE_BED]}})
+                if ATT_RELEASE_BED in network_edge and ATT_RELEASE_BED not in edge:
+                    att_release_bed = network_edge[ATT_RELEASE_BED]
+                elif ATT_RELEASE_BED in edge:
+                    att_release_bed = edge[ATT_RELEASE_BED]
                 else:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {ATT_RELEASE_BED: DEFAULT_RELEASE_BED}})
+                    att_release_bed = DEFAULT_RELEASE_BED
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {ATT_RELEASE_BED: att_release_bed}})
 
-                # Add blocking adjustment attribute
-                if 'blocking_adjustment' in edge:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'blocking_adjustment': edge['blocking_adjustment']}})
+                if 'blocking_adjustment' in network_edge and 'blocking_adjustment' not in edge:
+                    blocking_adj = network_edge['blocking_adjustment']
+                elif 'blocking_adjustment' in edge:
+                    blocking_adj = edge['blocking_adjustment']
                 else:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'blocking_adjustment': None}})
+                    blocking_adj = None
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {'blocking_adjustment': blocking_adj}})
 
-                # Add discharge timing adjustment attribute
-                if 'discharge_adjustment' in edge:
-                    discharge_pmf_file = edge['discharge_adjustment']
-                    discharge_pmf = pd.read_csv(discharge_pmf_file, sep='\s+', header=None, names=['x', 'p'])
-                    discharge_pmf.set_index('x', inplace=True, drop=True)
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'discharge_adjustment': discharge_pmf}})
+                if 'discharge_adjustment' in network_edge and 'discharge_adjustment' not in edge:
+                    discharge_adj = network_edge['discharge_adjustment']
+                elif 'discharge_adjustment' in edge:
+                    discharge_adj = edge['discharge_adjustment']
                 else:
-                    nx.set_edge_attributes(route_graph, {
-                        (edge['from'], edge['to']): {'discharge_adjustment': None}})
-
-            for node in route_graph.nodes():
-                nx.set_node_attributes(route_graph,
-                                       {node: {'planned_los': 0.0, 'actual_los': 0.0, 'blocked_duration': 0.0}})
+                    discharge_adj = None
+                nx.set_edge_attributes(route_graph, {
+                    (network_edge[0], network_edge[1]): {'discharge_adjustment': discharge_adj}})
 
             # Each patient will eventually end up with their own copy of the route since
             # it will contain LOS values
@@ -164,10 +156,14 @@ class StaticRouter(Router):
         for u, v, data in route_graph.edges(data=True):
             edge = route_graph.edges[u, v]
             if 'los' in data:
-                los_params = self.patient_flow_system.config.los_params
-                rg = self.patient_flow_system.config.rg['arrivals']
-                edge['planned_los'] = \
-                    create_los_partial(edge['los'], los_params, rg)
+                try:
+                    planned_los = float(edge['los'])
+                    edge['planned_los'] = planned_los
+                except:
+                    los_params = self.patient_flow_system.config.los_params
+                    rg = self.patient_flow_system.config.rg['arrivals']
+                    edge['planned_los'] = \
+                        create_los_partial(edge['los'], los_params, rg)
 
         return route_graph
 
@@ -212,7 +208,10 @@ class StaticRouter(Router):
 
         # Get all the edges out of current node whose edge_num is one more than current edge_num
         # For static routes, this should be a single edge.
+        # next_edges = [(u, v, d) for (u, v, d) in
+        #               G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
+
         next_edges = [(u, v, d) for (u, v, d) in
-                      G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
+                      G.out_edges(current_unit_name, data=True)]
 
         return next_edges[0]

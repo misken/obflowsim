@@ -15,8 +15,8 @@ DEFAULT_NUM_REPLICATIONS = 1
 DEFAULT_GET_BED = 1
 DEFAULT_RELEASE_BED = 1
 
-ATT_GET_BED = 'get_bed'
-ATT_RELEASE_BED = 'release_bed'
+ATT_GET_BED = 'get_new_bed'
+ATT_RELEASE_BED = 'release_old_bed'
 
 ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'uniform', 'choice']
 
@@ -60,11 +60,12 @@ class ArrivalType(StrEnum):
     There are six distinct arrival streams of patients.
     """
     SPONT_LABOR = 'spont_labor'
+    SCHED_CSECT = 'sched_csect'
+    SCHED_INDUCED_LABOR = 'sched_induced_labor'
     URGENT_INDUCED_LABOR = 'urgent_induced_labor'
     NON_DELIVERY_LDR = 'non_delivery_ldr'
     NON_DELIVERY_PP = 'non_delivery_pp'
-    SCHED_CSECT = 'sched_csect'
-    SCHED_INDUCED_LABOR = 'sched_induced_labor'
+
 
 
 class PatientTypeArrivalType:

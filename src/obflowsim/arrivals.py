@@ -17,6 +17,23 @@ if TYPE_CHECKING:
 
 
 def create_poisson_generators(env, config: Config, obsystem: PatientFlowSystem):
+    """
+    Create Poisson arrival generators for enabled Poisson arrival streams.
+
+    An arrival stream is enabled if its mean arrival rate is > 0 and its arrival toggle is set to 1.
+
+    Parameters
+    ----------
+    env : simpy.Environment
+        the simulation environment
+    config : Config
+    obsystem : PatientFlowSystem into which the arrival is inserted
+        This allows us to kick off a patient flowing through the system
+
+    Returns
+    -------
+    PatientPoissonArrivals object
+    """
     patient_generators_poisson = {}
     for arrival_stream_uid, arr_rate in config.rand_arrival_rates.items():
         # Check if this arrival stream is enabled
@@ -27,8 +44,8 @@ def create_poisson_generators(env, config: Config, obsystem: PatientFlowSystem):
                     'Urgent inductions are not yet implemented. No arrivals will be generated for this stream.')
             else:
                 patient_generator = PatientPoissonArrivals(env, arrival_stream_uid, arr_rate, config.rg['arrivals'],
-                                                           stop_time=config.run_time, max_arrivals=config.max_arrivals,
-                                                           patient_flow_system=obsystem)
+                                                           obsystem,
+                                                           stop_time=config.run_time, max_arrivals=config.max_arrivals)
 
                 patient_generators_poisson[arrival_stream_uid] = patient_generator
 
@@ -41,8 +58,8 @@ def create_scheduled_generators(env, config: Config, obsystem: PatientFlowSystem
         if len(schedule) > 0 and config.sched_arrival_toggles[sched_id] > 0:
             patient_generators_scheduled[sched_id] = \
                 PatientGeneratorWeeklyStaticSchedule(
-                    env, sched_id, config.schedules[sched_id],
-                    stop_time=config.run_time, max_arrivals=config.max_arrivals, patient_flow_system=obsystem)
+                    env, sched_id, config.schedules[sched_id], obsystem,
+                    stop_time=config.run_time, max_arrivals=config.max_arrivals)
 
     return patient_generators_scheduled
 
@@ -71,8 +88,8 @@ class PatientPoissonArrivals:
     """
 
     def __init__(self, env, arrival_stream_uid: ArrivalType, arrival_rate: float, arrival_stream_rg,
-                 stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity,
-                 patient_flow_system=None):
+                 patient_flow_system,
+                 stop_time=simpy.core.Infinity, max_arrivals=simpy.core.Infinity):
 
         # Parameter attributes
         self.env = env
@@ -105,12 +122,11 @@ class PatientPoissonArrivals:
 
             new_entity_id = create_patient_id(self.arrival_stream_uid, self.num_patients_created)
 
-            if self.patient_flow_system is not None:
-                new_patient = Patient(new_entity_id, self.arrival_stream_uid,
-                                      self.env.now, self.patient_flow_system)
+            new_patient = Patient(new_entity_id, self.arrival_stream_uid,
+                                  self.env.now, self.patient_flow_system)
 
-                logging.debug(
-                    f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
+            logging.debug(
+                f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
 
 
 class PatientGeneratorWeeklyStaticSchedule:
@@ -125,9 +141,8 @@ class PatientGeneratorWeeklyStaticSchedule:
     """
 
     def __init__(self, env, arrival_stream_uid: ArrivalType,
-                 schedule: NDArray,
-                 stop_time: float = simpy.core.Infinity, max_arrivals: int = simpy.core.Infinity,
-                 patient_flow_system=None):
+                 schedule: NDArray, patient_flow_system,
+                 stop_time: float = simpy.core.Infinity, max_arrivals: int = simpy.core.Infinity):
 
         # Parameter attributes
         self.env = env
@@ -163,12 +178,11 @@ class PatientGeneratorWeeklyStaticSchedule:
                     new_entity_id = create_patient_id(self.arrival_stream_uid, self.num_patients_created)
 
                     # Generate new patient
-                    if self.patient_flow_system is not None:
-                        new_patient = Patient(new_entity_id, self.arrival_stream_uid,
-                                              self.env.now, self.patient_flow_system, entry_delay=time_of_week)
+                    new_patient = Patient(new_entity_id, self.arrival_stream_uid,
+                                          self.env.now, self.patient_flow_system, entry_delay=time_of_week)
 
-                        logging.debug(
-                            f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
+                    logging.debug(
+                        f"{self.env.now:.4f}: {new_patient.patient_id} created at {self.env.now:.4f} ({self.patient_flow_system.sim_calendar.now()}).")
 
             # Yield until beginning of next weekly cycle
             yield self.env.timeout(weekly_cycle_length)

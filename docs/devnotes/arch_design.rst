@@ -29,24 +29,110 @@ Typical system configurations are:
 * obs ---> LDRP 
 * obs ---> LD --> R --> PP
 
-Patient types
-----------------
+If there is an unscheduled C-section, there would be a visit to a
+C-section procedure room before recovery or PP.
+
+But, we want to be able to handle more complicated paths. These often
+occur when an unscheduled C-section takes place in an LDRP setting. If the
+facility has some designated PP beds to be used by patients after an
+unscheduled C-section then the route might look like this:
+
+* obs ---> LDRP --> C-section --> PP
+
+But, if there are no PP beds available, patient might return to LDRP. Or, they
+might overflow to another non-LDRP, but not ideal unit for their PP stay. Or, they
+might stay in C-section recovery until a bed is available.
+
+Patient types and routing
+--------------------------
 
 Patient Type and Patient Flow Definitions
 
-* Type 1: random arrival spont labor, regular delivery, route = 1-2-4
-* Type 2: random arrival spont labor, C-section delivery, route = 1-2-3-4
-* Type 3: random arrival augmented labor, regular delivery, route = 1-2-4
-* Type 4: random arrival augmented labor, C-section delivery, route = 1-2-3-4
-* Type 5: sched arrival induced labor, regular delivery, route = 1-2-4
-* Type 6: sched arrival induced labor, C-section delivery, route = 1-2-3-4
-* Type 7: sched arrival, C-section delivery, route = 1-3-4
+* Type 1: random arrival spont labor, regular delivery, 
+* Type 2: random arrival spont labor, C-section delivery, 
+* Type 3: random arrival augmented labor, regular delivery, 
+* Type 4: random arrival augmented labor, C-section delivery, 
 
-* Type 8: urgent induced arrival, regular delivery, route = 1-2-4
-* Type 9: urgent induced arrival, C-section delivery, route = 1-3-4
+Starting to think that labor augmentation shouldn't define a separate patient type.
+Augmentation is indicated when labor is prolonged. Yes, we could model this as
+a separate patient type and adjust the LOS distribution accordingly. Or, we
+could model this is as an intervention that happens at a specific time and
+with a specific probability. Coming up with a way to model it this way opens
+the door for a pattern or method for modeling general interventions that
+may or may not occur. I guess even C-sections could be treated this away.
+Maybe it's not so much as redefining patient types as it is in how
+these types are modeled. Predetermining them via the various branching probabilities
+and LOS distributions makes the modeling easier but we should also think
+about the data gathering and distribution fitting implications.
 
-* Type 10: random arrival, non-delivered LD, route = 1
-* Type 11: random arrival, non-delivered PP route = 4
+Upon further thought, I think our original approach is easiest from a modeling point of view
+and really no difference from a data gathering point of view. The modeling is much easier since
+we don't have to do things like figure out when to decide to augment or not. It's all just
+baked into the LOS. But, to be able to do things like model a stay in an LDRP with a combination
+of a stay for the labor and delivery part and then a stay for PP (using the "days" approach) we
+need to extend the ``los`` parameter so that we can do summations of allowed distributions. To
+do this, we need to NOT use ``eval()`` and do it "correctly". Looking into ASTs. One way or
+another, it's doable and we can come back to this after making other modeling changes.
+
+
+
+* Type 5: sched arrival induced labor, regular delivery, 
+* Type 6: sched arrival induced labor, C-section delivery, 
+* Type 7: sched arrival, C-section delivery, 
+
+* Type 8: urgent induced arrival, regular delivery, 
+* Type 9: urgent induced arrival, C-section delivery, 
+
+* Type 10: random arrival, non-delivered LD, 
+* Type 11: random arrival, non-delivered PP 
+
+The route that patients take will depend on the configuration of units used
+by the facility. In general, routes are deterministic except for perhaps
+an LDRP configuration that has some PP beds for post C-section patients. In that
+case lack of availability of a PP bed might necessitate a return to an LDRP (?) or
+placement on some other "overflow" unit. Currently we have no way to model the
+placement on an alternate unit when insufficient capacity exists on primary 
+unit - **we need to have this general capability to handle more general patient
+flow modeling**.
+
+Router design
+--------------
+
+How to handle alternate destination units? Probabalistic branching?
+
+- while neither of the above are super common in inpatient OB flow,
+they are very common in other more general patient flow settings. 
+
+Where to do LOS assignment?
+    - happening in create_route
+    - LOS distribution is specified on the arcs within the route
+
+Should we assign entire route at time of patient creation?
+
+Is the edge_num attribute on arcs needed? How are we using it?
+
+Should we have a network that describes the possible moves between
+patient care units and a separate thing that actually constructs
+routes, either static or dynamic? This is how I modeled the ptube system.
+
+We could specify a physical flow network that defines arcs between
+nodes of patient care units. The attributes of those arcs could be
+the default behaviors with respect to getting and releasing beds, los,
+or blocking adjustments. Then, for each patient type, we create a 
+data structure for specifying a route which could include patient
+type specific attribute values that override the defaults. This
+data structure would have to be general enough to handle the 
+different types of routing we might want to do: static deterministic,
+alternate paths, probabalistic, other.
+
+
+
+Blocking
+---------
+
+Need way to specify if and how any blocking LOS adjustments should be done.
+
+TJW - LOS in LDR should be adjusted by time blocked in triage. However, once baby is born, time blocked in LDR waiting for PP is largely irrelevant.
 
 
 Arrival streams
@@ -57,6 +143,12 @@ Random arrivals
 
 Poisson arrivals - stationary and non-stationary versions
 
+For stationary Poisson arrivals, implemented a ``OBPatientGeneratorPoisson``
+class that samples from an exponential distribution at the specified
+rate to generate interarrival times. Upon each "arrival" a new ``OBPatient``
+object gets created.
+
+
 Urgent arrivals
 ^^^^^^^^^^^^^^^^
 
@@ -64,10 +156,6 @@ These are for the urgent inductions
 
 Poisson arrivals - stationary and non-stationary versions
 
-For stationary Poisson arrivals, implemented a ``OBPatientGeneratorPoisson``
-class that samples from an exponential distribution at the specified
-rate to generate interarrival times. Upon each "arrival" a new ``OBPatient``
-object gets created.
 
 Scheduled arrivals
 ^^^^^^^^^^^^^^^^^^^
@@ -152,16 +240,15 @@ TJW - The best way to model PP LOS, if
  patient to PP between 1800 and 2100 in the evening.
  
 TJW - Labor LOS
-is very dependent on labor type  -  spontaneous
-labor, vaginal birth/csec  -  augmented labor,
-vaginal birth/csec  -  induced labor, vaginal
-birth/csec    -  -  should be a variable 10,
-20, 30 and 40% of total birth vol    -  -
-the non-induced patient volume should be split evenly
-between spontaneous and augmented labor    -
--  can have different probabilities for vag birth vs csec
-delivery for the three labor types aboveOf
-course, scheduled csec patients do not spend any time in
+is very dependent on labor type  
+-  spontaneous labor, vaginal birth/csec  
+-  augmented labor, vaginal birth/csec  
+-  induced labor, vaginal birth/csec    
+-  -  should be a variable 10, 20, 30 and 40% of total birth vol    
+-  - the non-induced patient volume should be split evenly between spontaneous and augmented labor    -
+-  can have different probabilities for vag birth vs csec delivery for the three labor types above.
+
+Of course, scheduled csec patients do not spend any time in
 labor.  Rather, these patients go straight to the pre-op
 area.
  
@@ -185,22 +272,7 @@ most expensive patient type on the planet.
 
 Dist fitting in Python - https://fitter.readthedocs.io/en/latest/
 
-Router design
---------------
 
-Where to do LOS assignment?
-    - happening in create_route
-
-Should we assign entire route at time of patient creation?
-
-
-
-Blocking
----------
-
-Need way to specify if and how any blocking LOS adjustments should be done.
-
-TJW - LOS in LDR should be adjusted by time blocked in triage. However, once baby is born, time blocked in LDR waiting for PP is largely irrelevant.
 
 
 

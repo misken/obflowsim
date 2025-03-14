@@ -54,6 +54,7 @@ class Patient:
         # Initialize data structures for holding flow related quantities
         self.bed_requests = {}  # simpy request() events with unit name as keys
         self.unit_stops = []  # unit name
+        self.unit_stop_result = [] # visited or skipped
         self.planned_los = []
         self.adjusted_los = []
         self.request_entry_ts = []
@@ -61,7 +62,7 @@ class Patient:
         self.wait_to_enter = []
         self.request_exit_ts = []
         self.exit_ts = []
-        self.blocked = []
+        self.blocked = [] # True if blocked when trying to enter that unit on that stop
         self.wait_to_exit = []
         self.skipped_edge = []  # Destination node is the skipped unit
 

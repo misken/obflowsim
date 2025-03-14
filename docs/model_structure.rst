@@ -11,6 +11,51 @@ High level architecture of obflowsim
 - Simulation
 - Monitoring
 
+Patients are modeled with ``Patient`` objects.
+
+* These objects are created by arrival generators such as ``PatientPoissonArrivals`` and ``PatientGeneratorWeeklyStaticSchedule``.
+* Patient type is assigned upon creation.
+* Patient is put into the ``Entry`` node object to begin flowing through the patient flow system.
+
+Patient care units are modeled with ``PatientCareUnit`` objects
+
+* Its attributes include ``unit`` which is a SimPy ``Resource``.
+* The ``put`` method contains the logic for patient trying to get a bed (if needed), releasing previous bed, LOS, and any adjustments to
+LOS due to blocking or discharge timing.
+* A list of ``PatientCareUnit`` objects are an attribute of the ``PatientFlowSystem`` object.
+
+There is one ``PatientFlowSystem`` object comprised of a list of ``PatientCareUnit`` objects as well as an ``Entry`` object
+and an ``Exit`` object.
+
+* The ``PatientFlowSystem`` acts as a higher level container for all of the patient care units. It also is home to a 
+router object which controls how patients are routed as they traverse the system.
+
+The ``Config`` class stores an instance of simulation scenario configuration values.
+
+The ``routing`` module contains routing related classes and functions.
+
+The ``los`` module contains functions for facilitating creating of and use of length of stay distribution related objects and functions.
+
+The ``obconstants`` module is where we define a bunch of constants used throughout the model. These include patient type identifiers,
+arrival stream identifiers and the names of the patient care units.
+
+The ``io`` module handles the details of file reading (e.g. config files) and writing (e.g. log files).
+
+The ``clock_tools`` module contains the ``SimCalendar`` class and other utilities for working with simulation time and calendar time.
+
+There is a ``simulate.simulate()`` function which controls the running of one replication of the simulation model.
+
+There is a ``main()`` function which orchestrates the reading of all of the input parameters, running of all the replications,
+and processing of all of the simulation outputs.
+
+* It can be accessed via a CLI.
+
+There is a ``stats`` module containing all the functions for computing the multitude of output statistics.
+
+The ``obqueueing`` module contains functions for doing a static queueing based analysis of the simulation input configuration. 
+Things like offered load and utilization of the patient care units are computed and can be used for validation as well
+as screening out input scenarios that are infeasible from a capacity perspective.
+
 ************************************
 Detailed design of obflowsim
 ************************************
@@ -22,7 +67,7 @@ Model should be able to handle:
 
 * static routing
 * Standard 11 patient types
-* Standard 3 configurations: LDR, LDRP, traditional
+* Different configurations such as: traditional, LDR, LDRP, and LDRP+PP
 * blocking
 * stationary and time-dependent occupancy stats
 * random arrivals, scheduled arrivals, urgent arrivals
@@ -220,7 +265,9 @@ Blocking
 
 Need way to specify if and how any blocking LOS adjustments should be done.
 
-TJW - LOS in LDR should be adjusted by time blocked in triage. However, once baby is born, time blocked in LDR waiting for PP is largely irrelevant.
+.. topic:: LOS modeling ideas
+
+   TJW - LOS in LDR should be adjusted by time blocked in triage. However, once baby is born, time blocked in LDR waiting for PP is largely irrelevant.
 
 
 Monitoring

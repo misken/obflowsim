@@ -112,22 +112,26 @@ routes:
       to: OBS
       edge_num: 1
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
     - id: OBS_LDR
       from: OBS
       to: LDR
       edge_num: 2
       los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
       blocking_adjustment: delay
+      
     - id: LDR_PP
       from: LDR
       to: PP
       edge_num: 3
       los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
       discharge_adjustment: ./input/discharge_pdf.txt
+      
     - id: PP_EXIT
       from: PP
       to: EXIT
       edge_num: 4
+      
   RAND_SPONT_CSECT:
     edges:
     - id: ENTRY_OBS
@@ -135,21 +139,25 @@ routes:
       to: OBS
       edge_num: 1
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
     - id: OBS_LDR
       from: OBS
       to: LDR
       edge_num: 2
       los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
       blocking_adjustment: delay
+      
     - id: LDR_pp
       from: LDR
       to: PP
       edge_num: 3
       los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
+      
     - id: PP_EXIT
       from: PP
       to: EXIT
       edge_num: 4
+      
   RAND_AUG_NAT:
     edges:
     - id: ENTRY_OBS
@@ -157,17 +165,20 @@ routes:
       to: OBS
       edge_num: 1
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      
     - id: OBS_LDR
       from: OBS
       to: LDR
       edge_num: 2
       los: gamma(num_erlang_stages_ldr, mean_los_ldr / num_erlang_stages_ldr)
       blocking_adjustment: delay
+      
     - id: LDR_PP
       from: LDR
       to: PP
       edge_num: 3
       los: choice([24.0, 48.0, 72.0, 96.0], p=[0.1, 0.6, 0.2, 0.1])
+      
     - id: PP_EXIT
       from: PP
       to: EXIT

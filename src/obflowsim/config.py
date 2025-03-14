@@ -136,6 +136,7 @@ class Config:
         #                                                                            self.los_params, self.rg['los'])
 
         self.locations = config_dict['locations']
+        self.network = config_dict['network']
         self.routes = config_dict['routes']
         self.outputs = config_dict['outputs']
 

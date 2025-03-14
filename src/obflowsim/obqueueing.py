@@ -266,9 +266,10 @@ def static_load_analysis(obsystem: PatientFlowSystem):
                 unit = v  # Destination node is second component of edge tuple
                 if 'los_mean' in edge:
                     los_mean = edge['los_mean']
-                    ptype_key = f'{unit}_{pat_type}'
-                    load_unit[unit] += rate * los_mean
-                    load_unit_ptype[ptype_key] = rate * los_mean
+                    if los_mean > 0.0:
+                        ptype_key = f'{unit}_{pat_type}'
+                        load_unit[unit] += rate * los_mean
+                        load_unit_ptype[ptype_key] = rate * los_mean
 
     # Compute traffic intensity based on load and capacity
     traffic_intensity = {}
