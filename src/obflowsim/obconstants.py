@@ -23,6 +23,11 @@ ALLOWED_LOS_DIST_LIST = ['exponential', 'gamma', 'normal', 'triangular', 'unifor
 BASE_TIME_UNITS_PER_YEAR = {'h': 24 * 365, 'm': 1440 * 365}
 BASE_TIME_UNITS_PER_DAY = {'h': 24, 'm': 1440}
 
+# Network constants
+SRC = 0
+DEST = 1
+DATA = 2
+
 
 class PatientType(StrEnum):
     """

@@ -43,6 +43,10 @@ But, if there are no PP beds available, patient might return to LDRP. Or, they
 might overflow to another non-LDRP, but not ideal unit for their PP stay. Or, they
 might stay in C-section recovery until a bed is available.
 
+We don't need the input file to do everything. We need it to be able to express the
+type of routing logic desired, but it's the actual router object code that can
+do the detailed modeling of complex routes. The modeler can create new routers.
+
 Patient types and routing
 --------------------------
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import networkx as nx
+
 from obflowsim.obconstants import ArrivalType, UnitName, MARKED_PATIENT, PatientType
 
 from typing import TYPE_CHECKING
@@ -47,14 +49,27 @@ class Patient:
 
         # Initialize unit stop attributes
         self.current_stop_num = -1
+        self.previous_unit_name = None
+        self.current_unit_name = None
+        self.next_unit_name = None
+        self.previous_step = None
+        self.next_step = None
 
         # Get route
-        self.route_graph = self.pfs.router.create_route(self)
+        self.planned_route = self.pfs.router.create_route(self)
+
 
         # Initialize data structures for holding flow related quantities
-        self.bed_requests = {}  # simpy request() events with unit name as keys
-        self.unit_stops = []  # unit name
-        self.unit_stop_result = [] # visited or skipped
+        # QUESTION: What is the index? Is it physical visits? Is it planned visits of the units on a route?
+        #           How to capture which data related to units partially or fully skipped due to blocking?
+        # ANSWER: I think it has to be actual visits on the route. We know the planned visits from the route.
+        #         Skipping an entire physical stop should be a rare occurrence. Let's just store supplementary
+        #         info related to the rare occurrence.
+
+        self.actual_route = nx.DiGraph()  # Testing using as alternative or supplement to lists below
+
+        self.bed_requests = {}     # ephemeral simpy request() events with unit name as keys
+        self.unit_stops = []       # unit name
         self.planned_los = []
         self.adjusted_los = []
         self.request_entry_ts = []
@@ -62,9 +77,10 @@ class Patient:
         self.wait_to_enter = []
         self.request_exit_ts = []
         self.exit_ts = []
-        self.blocked = [] # True if blocked when trying to enter that unit on that stop
+        self.blocked = []          # True if blocked when trying to enter that unit on that stop
         self.wait_to_exit = []
-        self.skipped_edge = []  # Destination node is the skipped unit
+        self.skipped_edges = []    # Destination node is the skipped unit. Maybe this is a list of dicts so that we
+                                   # can store additional info about the skipped edge.
 
         # Initiate process of patient entering system
         self.pfs.env.process(
@@ -78,7 +94,7 @@ class Patient:
         -------
         int: number of nodes
         """
-        return len(self.route_graph.edges) + 1
+        return len(self.planned_route.edges) + 1
 
     def get_previous_unit_name(self):
 
@@ -108,6 +124,8 @@ class Patient:
         else:  # Not the first stop
             current_unit_name = self.unit_stops[self.current_stop_num]
 
+        assert current_unit_name == self.current_unit_name
+
         return current_unit_name
 
     def get_current_unit(self):
@@ -130,14 +148,14 @@ class Patient:
 
         """
 
-        if self.skipped_edge[self.current_stop_num - 1] is None:
+        if self.skipped_edges[self.current_stop_num - 1] is None:
             previous_unit_name = self.get_previous_unit_name()
         else:
-            previous_unit_name = self.skipped_edge[self.current_stop_num - 1][1]
+            previous_unit_name = self.skipped_edges[self.current_stop_num - 1][1]
 
         current_unit_name = self.get_current_unit_name()
         try:
-            current_route_edge = self.route_graph.edges[previous_unit_name, current_unit_name]
+            current_route_edge = self.planned_route.edges[previous_unit_name, current_unit_name]
         except KeyError:
             print(f'patient {self.patient_id} has no arc from {previous_unit_name} to {current_unit_name}')
             current_route_edge = None
@@ -197,7 +215,7 @@ class Patient:
         self.exit_ts.append(None)
         self.blocked.append(None)
         self.wait_to_exit.append(None)
-        self.skipped_edge.append(None)
+        self.skipped_edges.append(None)
 
     def __repr__(self):
         return "patient id: {}, patient_type: {}, time: {}". \

@@ -10,9 +10,9 @@ run_settings:
   # h = hours
   base_time_unit: h
   
-  # Comment out start_date line to use default of 2024-01-01
   # Use YYYY-mm-dd (i.e. %Y-%m-%d) format
   # use_calendar_time = 1 for yes, 0 for no
+  # If use_calendar_time == 1 then start_date is required (TODO: enforce in code)
   use_calendar_time: 1
   start_date: 2024-01-01
   
@@ -45,8 +45,8 @@ rand_arrival_rates:
 rand_arrival_toggles:
     spont_labor: 1
     urgent_induced_labor: 0
-    non_delivery_ldr: 1
-    non_delivery_pp: 1
+    non_delivery_ldr: 0
+    non_delivery_pp: 0
 
 # Use toggles to turn scheduled arrival streams on and off   
 schedule_files:
@@ -55,8 +55,8 @@ schedule_files:
 
 # 1=on, 0=off    
 sched_arrival_toggles:
-    sched_csect: 1
-    sched_induced_labor: 1
+    sched_csect: 0
+    sched_induced_labor: 0
 
 branching_probabilities:
     pct_spont_labor_aug: 0.4
@@ -65,8 +65,6 @@ branching_probabilities:
     pct_sched_ind_to_c: 0.12
     pct_urg_ind_to_c: 0.12
     
-# Comment out following line if you don't want to use time of day discharge patterns
-# discharge_pattern_file: ./input/discharge_cdf.txt
 
 # You can define input parameters to be used in los_distributions section
 los_params:
@@ -95,12 +93,16 @@ los_params:
 locations:
   OBS:
     capacity: 10
+    type: observation
   LDRP:
     capacity: 25
+    type: inpatient
   PP:
     capacity: 10
+    type: inpatient
   CSECT:
     capacity: 6
+    type: procedure
 
 
 random_number_streams:
@@ -164,6 +166,12 @@ network:
       to: PP
       release_old_bed: false
       get_new_bed: true
+      
+    - id: CSECT_LDRP
+      from: CSECT
+      to: LDRP
+      release_old_bed: false
+      get_new_bed: true
      
     - id: PP_EXIT
       from: PP
@@ -180,10 +188,12 @@ routes:
     edges:
     - id: ENTRY_OBS 
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      next: OBS_LDRP
 
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_nat / num_erlang_stages_ldrp)
       # Need to implement parser to handle summation of distributions
+      next: LDRP_EXIT
 
     - id: LDRP_EXIT
 
@@ -191,15 +201,25 @@ routes:
     edges:
     - id: ENTRY_OBS
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      next: OBS_LDRP
       
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_c / num_erlang_stages_labor_c)
+      next: LDRP_CSECT
       
     - id: LDRP_CSECT
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      next:
+      - CSECT_PP
+      - CSECT_LDRP
       
     - id: CSECT_PP
       los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
+      next: PP_EXIT
+      
+    - id: CSECT_LDRP
+      los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
+      next: PP_EXIT
       
     - id: PP_EXIT
 

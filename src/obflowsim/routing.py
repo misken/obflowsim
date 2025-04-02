@@ -7,6 +7,7 @@ import networkx as nx
 from networkx import DiGraph
 
 from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
+from obflowsim.obconstants import SRC, DEST, DATA
 from obflowsim.los import create_los_partial, los_mean
 
 
@@ -43,13 +44,18 @@ class StaticRouter(Router):
             # Add edges - simple serial route in this case
             for edge in route['edges']:
                 # Find the edge in the pfs network
-                network_edge = [(u,v,d) for u,v,d in pfs.network.edges(data=True) if d['id'] == edge['id']][0]
+                network_edge = [(u,v,d) for u,v,d in pfs.network.edges(data=True) if d['id'] == edge['id']].pop()
+                source = network_edge[SRC]
+                dest = network_edge[DEST]
 
-                route_graph.add_edge(network_edge[0], network_edge[1])
+                route_graph.add_edge(source, dest)
 
-                # if 'edge_num' in network_edge:
-                #     nx.set_edge_attributes(route_graph, {
-                #         (network_edge[0], network_edge[1]): {'edge_num': edge['edge_num']}})
+                if 'next' in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (source, dest): {'next': edge['next']}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (source, dest): {'next': None}})
 
                 if 'los' in network_edge and 'los' not in edge:
                     edge_los_mean = los_mean(network_edge['los'], los_params)
@@ -62,9 +68,9 @@ class StaticRouter(Router):
                     los = '0.0'
 
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {'los': los}})
+                    (network_edge[SRC], network_edge[DEST]): {'los': los}})
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {'los_mean': edge_los_mean}})
+                    (network_edge[SRC], network_edge[DEST]): {'los_mean': edge_los_mean}})
 
                 # Add get and keep bed attributes
                 if ATT_GET_BED in network_edge and ATT_GET_BED not in edge:
@@ -74,7 +80,7 @@ class StaticRouter(Router):
                 else:
                     att_get_bed =  DEFAULT_GET_BED
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {ATT_GET_BED: att_get_bed}})
+                    (network_edge[SRC], network_edge[DEST]): {ATT_GET_BED: att_get_bed}})
 
                 if ATT_RELEASE_BED in network_edge and ATT_RELEASE_BED not in edge:
                     att_release_bed = network_edge[ATT_RELEASE_BED]
@@ -83,7 +89,7 @@ class StaticRouter(Router):
                 else:
                     att_release_bed = DEFAULT_RELEASE_BED
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {ATT_RELEASE_BED: att_release_bed}})
+                    (network_edge[SRC], network_edge[DEST]): {ATT_RELEASE_BED: att_release_bed}})
 
                 if 'blocking_adjustment' in network_edge and 'blocking_adjustment' not in edge:
                     blocking_adj = network_edge['blocking_adjustment']
@@ -92,7 +98,7 @@ class StaticRouter(Router):
                 else:
                     blocking_adj = None
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {'blocking_adjustment': blocking_adj}})
+                    (network_edge[SRC], network_edge[DEST]): {'blocking_adjustment': blocking_adj}})
 
                 if 'discharge_adjustment' in network_edge and 'discharge_adjustment' not in edge:
                     discharge_adj = network_edge['discharge_adjustment']
@@ -101,7 +107,7 @@ class StaticRouter(Router):
                 else:
                     discharge_adj = None
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[0], network_edge[1]): {'discharge_adjustment': discharge_adj}})
+                    (network_edge[SRC], network_edge[DEST]): {'discharge_adjustment': discharge_adj}})
 
             # Each patient will eventually end up with their own copy of the route since
             # it will contain LOS values
@@ -189,7 +195,7 @@ class StaticRouter(Router):
             raise ValueError('Both after and unit must be None or both must not be None')
 
         # Get this patient's route graph
-        G = patient.route_graph
+        G = patient.planned_route
 
         # Find all possible next units
         if unit is None:
