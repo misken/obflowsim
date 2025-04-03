@@ -44,7 +44,7 @@ class StaticRouter(Router):
             # Add edges - simple serial route in this case
             for edge in route['edges']:
                 # Find the edge in the pfs network
-                network_edge = [(u,v,d) for u,v,d in pfs.network.edges(data=True) if d['id'] == edge['id']].pop()
+                network_edge = [(u, v, d) for u, v, d in pfs.network.edges(data=True) if d['id'] == edge['id']].pop()
                 source = network_edge[SRC]
                 dest = network_edge[DEST]
 
@@ -78,7 +78,7 @@ class StaticRouter(Router):
                 elif ATT_GET_BED in edge:
                     att_get_bed = edge[ATT_GET_BED]
                 else:
-                    att_get_bed =  DEFAULT_GET_BED
+                    att_get_bed = DEFAULT_GET_BED
                 nx.set_edge_attributes(route_graph, {
                     (network_edge[SRC], network_edge[DEST]): {ATT_GET_BED: att_get_bed}})
 
@@ -173,51 +173,43 @@ class StaticRouter(Router):
 
         return route_graph
 
-    def get_next_step(self, patient, after=None, unit=None):
+    def get_next_step(self, patient, skip=False):
         """
         Get next step (edge) in route
 
         Parameters
         ----------
         patient: Patient
-        after: Edge
+        skip: bool
 
         Returns
         -------
-        Edge
+        List[Edges]
 
 
         """
 
-        try:
-            (after is None and unit is None) or (after is not None and unit is not None)
-        except ValueError:
-            raise ValueError('Both after and unit must be None or both must not be None')
-
         # Get this patient's route graph
-        G = patient.planned_route
+        planned_route = patient.planned_route
 
-        # Find all possible next units
-        if unit is None:
-            current_unit_name = patient.get_current_unit_name()
+        if patient.current_stop_num == 0:
+            # We are at the ENTRY node
+            next_edges = [(u, v, d) for (u, v, d) in
+                          planned_route.out_edges(patient.current_unit_name, data=True)]
+        elif not skip:
+            # Not at ENTRY and not skipping the next edge (i.e., not blocked so long that LOS elapsed)
+            next_edge_names = planned_route.edges[patient.next_step[SRC], patient.next_step[SRC]]['next']
+            next_edges = [(u, v, d) for (u, v, d) in
+                          planned_route.edges(data=True) for name in next_edge_names if d['id'] == name]
         else:
-            current_unit_name = unit
+            return None
 
-        if after is None:
-            if current_unit_name == UnitName.ENTRY:
-                next_edge_num = 1
-            else:
-                current_route_edge = patient.get_current_route_edge()
-                next_edge_num = current_route_edge['edge_num'] + 1
-        else:
-            next_edge_num = after + 1
 
         # Get all the edges out of current node whose edge_num is one more than current edge_num
         # For static routes, this should be a single edge.
         # next_edges = [(u, v, d) for (u, v, d) in
         #               G.out_edges(current_unit_name, data=True) if d['edge_num'] == next_edge_num]
 
-        next_edges = [(u, v, d) for (u, v, d) in
-                      G.out_edges(current_unit_name, data=True)]
 
-        return next_edges[0]
+
+        return next_edges

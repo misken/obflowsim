@@ -52,6 +52,7 @@ class Patient:
         self.previous_unit_name = None
         self.current_unit_name = None
         self.next_unit_name = None
+        self.current_step = None
         self.previous_step = None
         self.next_step = None
 
