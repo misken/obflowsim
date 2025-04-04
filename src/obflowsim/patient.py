@@ -82,6 +82,7 @@ class Patient:
         self.wait_to_exit = []
         self.skipped_edges = []    # Destination node is the skipped unit. Maybe this is a list of dicts so that we
                                    # can store additional info about the skipped edge.
+        self.skipped_edges_cache = []  # Ephemeral
 
         # Initiate process of patient entering system
         self.pfs.env.process(

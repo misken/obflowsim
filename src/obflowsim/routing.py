@@ -198,11 +198,21 @@ class StaticRouter(Router):
                           planned_route.out_edges(patient.current_unit_name, data=True)]
         elif not skip:
             # Not at ENTRY and not skipping the next edge (i.e., not blocked so long that LOS elapsed)
-            next_edge_names = planned_route.edges[patient.next_step[SRC], patient.next_step[SRC]]['next']
+            next_edge_names = planned_route.edges[patient.next_step[SRC], patient.next_step[DEST]]['next']
             next_edges = [(u, v, d) for (u, v, d) in
                           planned_route.edges(data=True) for name in next_edge_names if d['id'] == name]
         else:
-            return None
+            num_stops_skipped = len(patient.skipped_edges_cache)
+            last_skipped_edge_record = patient.skipped_edges_cache.pop()
+            last_skipped_edge = last_skipped_edge_record['skipped_edge']
+
+            next_edge_names = planned_route.edges[last_skipped_edge[SRC], last_skipped_edge[DEST]]['next']
+            next_edges = [(u, v, d) for (u, v, d) in
+                          planned_route.edges(data=True) for name in next_edge_names if d['id'] == name]
+
+            # skipped_edge_record = {'current_stop_num': csn,
+            #                        'skipped_edge': outgoing_route_edge,
+            #                        'planned_los': planned_los}
 
 
         # Get all the edges out of current node whose edge_num is one more than current edge_num

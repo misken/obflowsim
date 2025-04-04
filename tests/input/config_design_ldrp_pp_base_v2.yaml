@@ -114,32 +114,36 @@ random_number_streams:
 # In this scenario, patients who labor in LDRP and then need a C-section, do NOT return to the
 # LDRP. Instead they go to a PP bed.
 
+# I think it simplifies things to get rid of the notion of some unit transfers not requiring a bed (CSECT).
+        # Instead, just set the capacity to a high level. This way, request tokens signify resources claimed by
+        # the patient.
+
 network:
    edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-      get_new_bed: true  
+      # get_new_bed: true  
       
     - id: ENTRY_LDRP
       from: ENTRY
       to: LDRP
-      get_new_bed: true  
+      # get_new_bed: true  
 
     - id: ENTRY_CSECT
       from: ENTRY
       to: CSECT
-      get_new_bed: false
+      # get_new_bed: false
       
     - id: ENTRY_PP
       from: ENTRY
       to: PP
-      get_new_bed: false
+      # get_new_bed: false
         
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      get_new_bed: true
+      # get_new_bed: true
       release_old_bed: true
       blocking_adjustment: delay
       
@@ -164,19 +168,17 @@ network:
     - id: CSECT_PP
       from: CSECT
       to: PP
-      release_old_bed: false
-      get_new_bed: true
+      # get_new_bed: true
       
     - id: CSECT_LDRP
       from: CSECT
-      to: LDRP
-      release_old_bed: false
+      # to: LDRP
       get_new_bed: true
      
     - id: PP_EXIT
       from: PP
       to: EXIT
-      release_old_bed: true
+      # release_old_bed: true
       discharge_adjustment: ./input/discharge_pdf.txt
 
 # For the los attribute, you can use a restricted set of numpy distributions parameterized via
