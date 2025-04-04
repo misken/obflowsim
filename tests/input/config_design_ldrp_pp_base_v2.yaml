@@ -172,8 +172,8 @@ network:
       
     - id: CSECT_LDRP
       from: CSECT
-      # to: LDRP
-      get_new_bed: true
+      to: LDRP
+      #get_new_bed: true
      
     - id: PP_EXIT
       from: PP

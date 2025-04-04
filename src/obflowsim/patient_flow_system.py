@@ -168,6 +168,8 @@ class EntryNode:
         # Wait for any entry_delay needed
         yield self.env.timeout(patient.entry_delay)
 
+        patient.request_exit_ts[csn] = self.env.now
+
         logging.debug(
             f"{self.env.now:.4f}: {patient.patient_id} ready to leave {self.name} node.")
 
@@ -188,7 +190,9 @@ class EntryNode:
 
 
         # Put patient in next unit
-        self.env.process(pfs.patient_care_units[patient.next_unit_name].put(patient, pfs))
+        self.env.process(pfs.patient_care_units[patient.next_unit_name].put(patient, pfs,
+                                                                            UnitName.ENTRY.value,
+                                                                            patient.next_step[0]))
 
 
 
@@ -548,11 +552,14 @@ def find_next_unit_stop(env: simpy.Environment, patient: Patient, pfs: PatientFl
         dest_unit_names = [v for (u, v, d) in patient.next_step]
         dest_units = [pfs.patient_care_units[name] for name in dest_unit_names]
         # Request bed(s) - Creates SimPy event objects
-        bed_request_events = {dest_unit.unit.request(): dest_unit.name for dest_unit in dest_units}
+        bed_request_events = {pfs.patient_care_units[v].unit.request(): {'dest_unit_name': v,
+                                                         'dest_unit': pfs.patient_care_units[v],
+                                                         'edge': (u, v, d)} for (u, v, d) in patient.next_step}
 
         # Yield until we get a bed or our planned los has elapsed due to being blocked
-        bed_req_los_events = bed_request_events.copy()
-        bed_req_los_events[env.timeout(planned_los, value='los_elapsed')] = 'los_elapsed'
+        bed_req_los_events = [key for key in bed_request_events.keys()]
+        #bed_req_los_events[env.timeout(planned_los, value='los_elapsed')] = 'los_elapsed'
+        bed_req_los_events.append[env.timeout(planned_los, value='los_elapsed')]
 
         # Try to get a bed
         got_new_bed = False
@@ -560,7 +567,7 @@ def find_next_unit_stop(env: simpy.Environment, patient: Patient, pfs: PatientFl
 
         # Check if we got a bed before our los has elapsed
         if get_bed != 'los_elapsed':
-            entering_unit_name = bed_req_los_events[get_bed]
+            entering_unit_name = bed_req_los_events[get_bed]['dest_unit_name']
             patient.bed_requests[get_bed] = entering_unit_name
             patient.next_unit_name = entering_unit_name
             got_new_bed = True
