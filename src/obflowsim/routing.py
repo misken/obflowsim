@@ -2,13 +2,19 @@ import logging
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
-import pandas as pd
+from typing import TYPE_CHECKING
+
+import simpy
+from simpy.events import AnyOf
 import networkx as nx
 from networkx import DiGraph
 
-from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
+from obflowsim.obconstants import DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
 from obflowsim.obconstants import SRC, DEST, DATA
 from obflowsim.los import create_los_partial, los_mean
+from obflowsim.patient import Patient
+
+
 
 
 class Router(ABC):
@@ -16,6 +22,9 @@ class Router(ABC):
     @abstractmethod
     def get_next_step(self, entity):
         pass
+
+
+
 
 
 class StaticRouter(Router):
@@ -133,7 +142,10 @@ class StaticRouter(Router):
         # TODO: Implement route validation rules
 
         # For example, all beds must eventually be released and can't keep bed if dest is EXIT
-        return True
+        if route_graph:
+            return True
+        else:
+            return False
 
     def create_route(self, patient) -> DiGraph:
         """
@@ -141,9 +153,6 @@ class StaticRouter(Router):
         Parameters
         ----------
         patient
-
-        entry_delay: float (default is 0 implying patient uses ENTRY only as a queueing location)
-            Used with scheduled arrivals by holding patient for ``entry_delay`` time units before allowed to enter
 
         Returns
         -------
@@ -165,7 +174,7 @@ class StaticRouter(Router):
                 try:
                     planned_los = float(edge['los'])
                     edge['planned_los'] = planned_los
-                except:
+                except ValueError:
                     los_params = self.patient_flow_system.config.los_params
                     rg = self.patient_flow_system.config.rg['arrivals']
                     edge['planned_los'] = \

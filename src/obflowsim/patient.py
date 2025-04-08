@@ -55,6 +55,7 @@ class Patient:
         self.current_step = None
         self.previous_step = None
         self.next_step = None
+        self.sampled_los = None
 
         # Get route
         self.planned_route = self.pfs.router.create_route(self)
