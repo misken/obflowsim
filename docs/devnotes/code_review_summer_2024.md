@@ -3,7 +3,7 @@
 I'm picking this project back up after putting it down for almost two years. I need to assess
 the current state of the code and figure out how to move forward.
 
-## Build in constants
+## Built in constants
 
 Defined constants for:
 
@@ -73,7 +73,7 @@ This module contains most of the objects making up the simulation model.
 
 ### ENTRY and EXIT nodes
 
-Currently, ENTRY and EXIT are just instances of `PatientCareUnit`, even though they really
+As of summer 2024, ENTRY and EXIT are just instances of `PatientCareUnit`, even though they really
 aren't patient care units. This means they show up in routes and locations section of config.
 When I started implementing scheduled arrivals and needing to have patients delay in ENTRY until
 their scheduled procedure time, I started to think it might make more sense to have separate

@@ -45,7 +45,12 @@ might stay in C-section recovery until a bed is available.
 
 We don't need the input file to do everything. We need it to be able to express the
 type of routing logic desired, but it's the actual router object code that can
-do the detailed modeling of complex routes. The modeler can create new routers.
+do the detailed modeling of complex routes. **The modeler can create new routers.**
+
+Not sure how to handle procedure areas vs inpatient beds. One one hand, OBS is also
+not an inpatient bed just as a C-section procedure room is not. The different cases are
+when a procedure area is visited during the stay in, say, an inpatient bed. How to model
+this from a patient routing point of view? How to represent in data input file?
 
 Patient types and routing
 --------------------------
@@ -77,7 +82,6 @@ of a stay for the labor and delivery part and then a stay for PP (using the "day
 need to extend the ``los`` parameter so that we can do summations of allowed distributions. To
 do this, we need to NOT use ``eval()`` and do it "correctly". Looking into ASTs. One way or
 another, it's doable and we can come back to this after making other modeling changes.
-
 
 
 * Type 5: sched arrival induced labor, regular delivery, 

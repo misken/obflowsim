@@ -38,24 +38,28 @@ class Patient:
         entry_delay : float
             Length of time to hold patient in ENTRY node before routing to first location
         """
-        self.patient_id = patient_id
-        self.arrival_type = arrival_type
-        self.system_arrival_ts = arr_time + entry_delay
-        self.entry_delay = entry_delay
-        self.pfs = patient_flow_system
+        self.patient_id: str = patient_id
+        self.arrival_type: ArrivalType = arrival_type
+        self.system_arrival_ts: float = arr_time + entry_delay
+        self.entry_delay: float = entry_delay
+        self.pfs: PatientFlowSystem = patient_flow_system
 
         # Determine patient type
-        self.patient_type = self.assign_patient_type()
+        self.patient_type: str = self.assign_patient_type()
 
         # Initialize unit stop attributes
         self.current_stop_num = -1
-        self.previous_unit_name = None
-        self.current_unit_name = None
-        self.next_unit_name = None
-        self.current_step = None
-        self.previous_step = None
-        self.next_step = None
-        self.sampled_los = None
+
+        self.previous_unit_name: str|None = None
+        self.current_unit_name: str|None = None
+        self.next_unit_name: str|None = None
+
+        self.previous_step: tuple[str, str, dict]|None = None
+        self.current_step: tuple[str, str, dict]|None = None
+        self.next_step: tuple[str, str, dict]|None = None
+
+        self.next_step_options: list[tuple[str, str, dict]]|None = None
+        self.sampled_los: float|None = None
 
         # Get route
         self.planned_route = self.pfs.router.create_route(self)
@@ -70,20 +74,20 @@ class Patient:
 
         self.actual_route = nx.DiGraph()  # Testing using as alternative or supplement to lists below
 
-        self.bed_requests = {}     # ephemeral simpy request() events with unit name as keys
-        self.unit_stops = []       # unit name
-        self.planned_los = []
-        self.adjusted_los = []
-        self.request_entry_ts = []
-        self.entry_ts = []
-        self.wait_to_enter = []
-        self.request_exit_ts = []
-        self.exit_ts = []
-        self.blocked = []          # True if blocked when trying to enter that unit on that stop
-        self.wait_to_exit = []
-        self.skipped_edges = []    # Destination node is the skipped unit. Maybe this is a list of dicts so that we
+        self.bed_requests: dict = {}     # ephemeral simpy request() events with unit name as keys
+        self.unit_stops: list[str] = []       # unit name
+        self.planned_los: list[float] = []
+        self.adjusted_los: list[float] = []
+        self.request_entry_ts: list[float] = []
+        self.entry_ts: list[float] = []
+        self.wait_to_enter: list[float] = []
+        self.request_exit_ts: list[float] = []
+        self.exit_ts: list[float] = []
+        self.blocked: list[bool] = []          # True if blocked when trying to enter that unit on that stop
+        self.wait_to_exit: list[float] = []
+        self.skipped_edges: list[dict] = []    # Destination node is the skipped unit. Maybe this is a list of dicts so that we
                                    # can store additional info about the skipped edge.
-        self.skipped_edges_cache = []  # Ephemeral
+        self.skipped_edges_cache: list[dict] = []  # Ephemeral
 
         # Initiate process of patient entering system
         self.pfs.env.process(
@@ -165,7 +169,7 @@ class Patient:
 
         return current_route_edge
 
-    def assign_patient_type(self):
+    def assign_patient_type(self: object) -> str:
         arr_stream_rg = self.pfs.config.rg['arrivals']
         if self.arrival_type == ArrivalType.SPONT_LABOR.value:
             # Determine if labor augmented or not

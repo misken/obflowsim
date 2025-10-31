@@ -59,8 +59,8 @@ sched_arrival_toggles:
     sched_induced_labor: 0
 
 branching_probabilities:
-    pct_spont_labor_aug: 0.4
-    pct_spont_labor_to_c: 0.2
+    pct_spont_labor_aug: 0.0
+    pct_spont_labor_to_c: 0.0
     pct_aug_labor_to_c: 0.06
     pct_sched_ind_to_c: 0.12
     pct_urg_ind_to_c: 0.12
@@ -117,69 +117,56 @@ random_number_streams:
 # I think it simplifies things to get rid of the notion of some unit transfers not requiring a bed (CSECT).
         # Instead, just set the capacity to a high level. This way, request tokens signify resources claimed by
         # the patient.
+        
+# Attributes related to adjusting discharge timing or resource getting or releasing should be in the routing section
+# and not in the network. The network just definies the physical infrastructure.
 
 network:
    edges:
     - id: ENTRY_OBS
       from: ENTRY
       to: OBS
-      # get_new_bed: true  
       
     - id: ENTRY_LDRP
       from: ENTRY
       to: LDRP
-      # get_new_bed: true  
 
     - id: ENTRY_CSECT
       from: ENTRY
       to: CSECT
-      # get_new_bed: false
       
     - id: ENTRY_PP
       from: ENTRY
       to: PP
-      # get_new_bed: false
         
     - id: OBS_LDRP
       from: OBS
       to: LDRP
-      # get_new_bed: true
-      release_old_bed: true
-      blocking_adjustment: delay
-      
+            
     - id: LDRP_EXIT
       from: LDRP
       to: EXIT
-      release_old_bed: true
-      discharge_adjustment: ./input/discharge_pdf.txt
-      
+            
     - id: LDRP_PP
       from: LDRP
       to: PP
-      release_old_bed: true
-      get_new_bed: true
-      
+            
     - id: LDRP_CSECT
       from: LDRP
       to: CSECT
-      release_old_bed: true
-      get_new_bed: false
-
+ 
     - id: CSECT_PP
       from: CSECT
       to: PP
-      # get_new_bed: true
-      
+            
     - id: CSECT_LDRP
       from: CSECT
       to: LDRP
-      #get_new_bed: true
-     
+           
     - id: PP_EXIT
       from: PP
       to: EXIT
-      # release_old_bed: true
-      discharge_adjustment: ./input/discharge_pdf.txt
+      
 
 # For the los attribute, you can use a restricted set of numpy distributions parameterized via
 # constants that are user defined parameters in the los_params section. Eventually this will
@@ -190,14 +177,18 @@ routes:
     edges:
     - id: ENTRY_OBS 
       los: gamma(num_erlang_stages_obs, mean_los_obs / num_erlang_stages_obs)
+      rule: ORDERED_POOL         # This is the default and works for one or more units. First available, checked in specified order. 
+                         # This is how SimPy works - available capacity is checked in order specified in AnyOf() argument
       next: OBS_LDRP
 
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_nat / num_erlang_stages_ldrp)
-      # Need to implement parser to handle summation of distributions
+      # Need to implement parser to handle summation of distributions. Do I? Why would I need a summation?
+      blocking_adjustment: delay
       next: LDRP_EXIT
 
     - id: LDRP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
 
   RAND_SPONT_CSECT:
     edges:
@@ -207,13 +198,24 @@ routes:
       
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_c / num_erlang_stages_labor_c)
+      blocking_adjustment: delay
       next: LDRP_CSECT
+      
+      # Here is a complication. Seems like hospital would check to see if there is a bed available in the designated pool of PP beds before
+      # going to CSECT. If so
+      # we want to release the LDRP bed and perhaps even reserve the PP bed. If no PP bed available, then it seems like we'd want to keep the
+      # current LDRP bed and just return to it after the C-section
       
     - id: LDRP_CSECT
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
+      
+
+      rule: ORDERED_POOL  # This is the default and is how SimPy works - available capacity is checked in order specified in AnyOf() argument
       next:
-      - CSECT_PP
-      - CSECT_LDRP
+      - id: CSECT_PP
+        keep: false   # The non-default value
+      - id: CSECT_LDRP
+        get: false   # # The non-default value
       
     - id: CSECT_PP
       los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
@@ -224,6 +226,7 @@ routes:
       next: PP_EXIT
       
     - id: PP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
 
   RAND_AUG_NAT:
     edges:
@@ -232,8 +235,10 @@ routes:
 
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_aug_nat / num_erlang_stages_ldrp)
+      blocking_adjustment: delay
 
     - id: LDRP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
     
   RAND_AUG_CSECT:
     edges:
@@ -242,6 +247,7 @@ routes:
       
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_aug_c / num_erlang_stages_labor_c)
+      blocking_adjustment: delay
       
     - id: LDRP_CSECT
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
@@ -250,7 +256,8 @@ routes:
       los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
       
     - id: PP_EXIT
-    
+      discharge_adjustment: ./input/discharge_pdf.txt
+      
   SCHED_CSECT:
     edges:
     - id: ENTRY_CSECT
@@ -260,7 +267,7 @@ routes:
       los: choice([24.0, 48.0, 72.0, 96.0, 120.0], p=[0.05, 0.4, 0.4, 0.10, 0.05])
 
     - id: PP_EXIT
-      from: PP
+      discharge_adjustment: ./input/discharge_pdf.txt
       
   SCHED_IND_NAT:
     edges:
@@ -269,8 +276,10 @@ routes:
 
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_ldrp, mean_los_ldrp_ind_nat / num_erlang_stages_ldrp)
+      blocking_adjustment: delay
 
     - id: LDRP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
       
   SCHED_IND_CSECT:
     edges:
@@ -279,6 +288,7 @@ routes:
       
     - id: OBS_LDRP
       los: gamma(num_erlang_stages_labor_c, mean_los_ldrp_ind_c / num_erlang_stages_labor_c)
+      blocking_adjustment: delay
       
     - id: LDRP_CSECT
       los: gamma(num_erlang_stages_csect, mean_los_csect / num_erlang_stages_csect)
@@ -287,6 +297,7 @@ routes:
       los: gamma(num_erlang_stages_pp_c, mean_los_pp_c / num_erlang_stages_pp_c)
       
     - id: PP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
     
   RAND_NONDELIV_LDR:
     edges:
@@ -294,6 +305,7 @@ routes:
       los: gamma(num_erlang_stages_ldr_nondelivery, mean_los_ldr_nondelivery / num_erlang_stages_ldr_nondelivery)
       
     - id: LDRP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
 
       
   RAND_NONDELIV_PP:
@@ -302,6 +314,7 @@ routes:
       los: gamma(num_erlang_stages_pp_nondelivery, mean_los_pp_nondelivery / num_erlang_stages_pp_nondelivery)
 
     - id: PP_EXIT
+      discharge_adjustment: ./input/discharge_pdf.txt
 
     
     

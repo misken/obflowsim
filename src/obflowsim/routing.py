@@ -27,10 +27,11 @@ class Router(ABC):
 
 
 
-class StaticRouter(Router):
+class OBRouter(Router):
     def __init__(self, env, pfs):
         """
-        Routes patients having a fixed, serial route
+        Routes patients having mostly fixed serial routes though might have some capacity modulated alternate
+        paths.
 
         Parameters
         ----------
@@ -42,7 +43,7 @@ class StaticRouter(Router):
         self.patient_flow_system = pfs
 
         # Dict of networkx DiGraph objects
-        self.route_graphs = {}
+        self.route_graphs: dict[str, DiGraph] = {}
 
         los_params = pfs.config.los_params
 
@@ -59,6 +60,9 @@ class StaticRouter(Router):
 
                 route_graph.add_edge(source, dest)
 
+                nx.set_edge_attributes(route_graph, {
+                    (source, dest): {'id': edge['id']}})
+
                 if 'next' in edge:
                     nx.set_edge_attributes(route_graph, {
                         (source, dest): {'next': edge['next']}})
@@ -66,57 +70,57 @@ class StaticRouter(Router):
                     nx.set_edge_attributes(route_graph, {
                         (source, dest): {'next': None}})
 
-                if 'los' in network_edge and 'los' not in edge:
-                    edge_los_mean = los_mean(network_edge['los'], los_params)
-                    los = network_edge['los']
-                elif 'los' in edge:
+                if 'los' in edge:
                     edge_los_mean = los_mean(edge['los'], los_params)
                     los = edge['los']
                 else:
                     edge_los_mean = 0.0
                     los = '0.0'
 
+                if 'discharge_adjustment' in edge:
+                    nx.set_edge_attributes(route_graph, {
+                        (source, dest): {'discharge_adjustment': edge['discharge_adjustment']}})
+                else:
+                    nx.set_edge_attributes(route_graph, {
+                        (source, dest): {'discharge_adjustment': None}})
+
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {'los': los}})
+                    (source, dest): {'los': los}})
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {'los_mean': edge_los_mean}})
+                    (source, dest): {'los_mean': edge_los_mean}})
 
                 # Add get and keep bed attributes
-                if ATT_GET_BED in network_edge and ATT_GET_BED not in edge:
-                    att_get_bed = network_edge[ATT_GET_BED]
-                elif ATT_GET_BED in edge:
+                if ATT_GET_BED in edge:
                     att_get_bed = edge[ATT_GET_BED]
                 else:
                     att_get_bed = DEFAULT_GET_BED
-                nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {ATT_GET_BED: att_get_bed}})
 
-                if ATT_RELEASE_BED in network_edge and ATT_RELEASE_BED not in edge:
-                    att_release_bed = network_edge[ATT_RELEASE_BED]
-                elif ATT_RELEASE_BED in edge:
+                nx.set_edge_attributes(route_graph, {
+                    (source, dest): {ATT_GET_BED: att_get_bed}})
+
+                if ATT_RELEASE_BED in edge:
                     att_release_bed = edge[ATT_RELEASE_BED]
                 else:
                     att_release_bed = DEFAULT_RELEASE_BED
-                nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {ATT_RELEASE_BED: att_release_bed}})
 
-                if 'blocking_adjustment' in network_edge and 'blocking_adjustment' not in edge:
-                    blocking_adj = network_edge['blocking_adjustment']
-                elif 'blocking_adjustment' in edge:
+                nx.set_edge_attributes(route_graph, {
+                    (source, dest): {ATT_RELEASE_BED: att_release_bed}})
+
+                if 'blocking_adjustment' in edge:
                     blocking_adj = edge['blocking_adjustment']
                 else:
                     blocking_adj = None
-                nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {'blocking_adjustment': blocking_adj}})
 
-                if 'discharge_adjustment' in network_edge and 'discharge_adjustment' not in edge:
-                    discharge_adj = network_edge['discharge_adjustment']
-                elif 'discharge_adjustment' in edge:
+                nx.set_edge_attributes(route_graph, {
+                    (source, dest): {'blocking_adjustment': blocking_adj}})
+
+                if 'discharge_adjustment' in edge:
                     discharge_adj = edge['discharge_adjustment']
                 else:
                     discharge_adj = None
+
                 nx.set_edge_attributes(route_graph, {
-                    (network_edge[SRC], network_edge[DEST]): {'discharge_adjustment': discharge_adj}})
+                    (source, dest): {'discharge_adjustment': discharge_adj}})
 
             # Each patient will eventually end up with their own copy of the route since
             # it will contain LOS values
@@ -207,9 +211,11 @@ class StaticRouter(Router):
                           planned_route.out_edges(patient.current_unit_name, data=True)]
         elif not skip:
             # Not at ENTRY and not skipping the next edge (i.e., not blocked so long that LOS elapsed)
-            next_edge_names = planned_route.edges[patient.next_step[SRC], patient.next_step[DEST]]['next']
+            next_edge_names = planned_route.edges[patient.current_step[SRC], patient.current_step[DEST]]['next']
+            if not isinstance(next_edge_names, list):
+                next_edge_names = [next_edge_names]
             next_edges = [(u, v, d) for (u, v, d) in
-                          planned_route.edges(data=True) for name in next_edge_names if d['id'] == name]
+                          patient.planned_route.edges(data=True) for name in next_edge_names if d['id'] == name]
         else:
             num_stops_skipped = len(patient.skipped_edges_cache)
             last_skipped_edge_record = patient.skipped_edges_cache.pop()

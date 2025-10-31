@@ -19,7 +19,7 @@ import obflowsim.config as obconfig
 from obflowsim.arrivals import create_poisson_generators, create_scheduled_generators
 from obflowsim.clock_tools import SimCalendar
 from obflowsim.patient_flow_system import PatientFlowSystem
-from obflowsim.routing import StaticRouter
+from obflowsim.routing import OBRouter
 
 from typing import TYPE_CHECKING
 
@@ -80,7 +80,7 @@ def simulate(config: Config, rep_num: int):
     obsystem = PatientFlowSystem(env, config, sim_calendar)
 
     # Create router and register it with the PatientFlowSystem
-    router = StaticRouter(env, obsystem)
+    router = OBRouter(env, obsystem)
     obsystem.router = router
 
     # Create patient generators

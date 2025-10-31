@@ -18,7 +18,7 @@ from obflowsim.patient import Patient
 from obflowsim.obconstants import UnitName, DEFAULT_GET_BED, DEFAULT_RELEASE_BED, ATT_RELEASE_BED, ATT_GET_BED
 from obflowsim.obconstants import SRC, DEST, DATA
 from obflowsim.los import los_mean
-from obflowsim.routing import find_next_unit_stop
+
 
 
 class PatientFlowSystem:
@@ -156,7 +156,7 @@ class EntryNode:
         self.inc_occ()
 
         # Update patient attributes
-        csn = 0
+        csn: int = 0
         patient.current_stop_num = csn
         patient.current_unit_name = self.name
         patient.append_empty_unit_stop()
@@ -182,18 +182,17 @@ class EntryNode:
         skip = False
         while not got_new_bed:
 
-            # TODO: This next line needs to take into account that we may have just skipped a stop
-            patient.next_step = pfs.router.get_next_step(patient, skip=skip)
+            patient.next_step_options = pfs.router.get_next_step(patient, skip=skip)
 
             # We know where we are going, get ready to try to grab a new bed
-            patient.next_unit_name = patient.next_step[0][DEST]
+            patient.next_unit_name = patient.next_step_options[0][DEST]
             patient.request_exit_ts[csn] = self.env.now
 
             request_entry_ts = self.env.now  # Note the current time we tried to enter next unit
             exiting_unit = patient.get_current_unit()
-            exiting_unit_name = exiting_unit.name  # Unit we are in right now while trying to enter this unit
+            exiting_unit_name = exiting_unit.name  
 
-            outgoing_route_edge = patient.next_step[0]
+            outgoing_route_edge = patient.next_step_options[0]
 
             # We are trying to leave the unit patient currently in to visit another unit - patient.next_unit_name
             logging.debug(
@@ -203,13 +202,13 @@ class EntryNode:
             sampled_los = outgoing_route_edge[DATA]['planned_los']()
 
             # Need request objects for each destination in next_step edges
-            dest_unit_names = [v for (u, v, d) in patient.next_step]
+            dest_unit_names = [v for (u, v, d) in patient.next_step_options]
             dest_units = [pfs.patient_care_units[name] for name in dest_unit_names]
             # Request bed(s) - Creates SimPy event objects
             bed_request_events = {pfs.patient_care_units[v].unit.request(): {'dest_unit_name': v,
                                                                              'dest_unit': pfs.patient_care_units[v],
                                                                              'edge': (u, v, d)} for (u, v, d) in
-                                  patient.next_step}
+                                  patient.next_step_options}
 
             # Yield until we get a bed or our planned los has elapsed due to being blocked
             bed_req_los_events = [key for key in bed_request_events.keys()]
@@ -223,14 +222,18 @@ class EntryNode:
             # Check if we got a bed before our los has elapsed
             if los_timeout not in get_bed:
                 successful_req = None
+                next_step = None
                 for req in bed_request_events:
                     if req in get_bed:
                         successful_req = req
-                        next_edge = bed_request_events[req]['edge']
+                        next_step = bed_request_events[req]['edge']
+
+                assert successful_req is not None
 
                 entering_unit_name = bed_request_events[successful_req]['dest_unit_name']
                 patient.bed_requests[entering_unit_name] = successful_req
                 patient.next_unit_name = entering_unit_name
+                patient.next_step = next_step
                 patient.sampled_los = sampled_los
                 got_new_bed = True
                 skip = False
@@ -276,7 +279,7 @@ class EntryNode:
 
         # Put patient in next unit
         self.env.process(pfs.patient_care_units[patient.next_unit_name].put(patient, pfs,
-                                                                            next_edge,
+                                                                            next_step,
                                                                             request_entry_ts))
 
 
@@ -357,12 +360,15 @@ class PatientCareUnit:
         patient.current_stop_num += 1
         csn = patient.current_stop_num
         patient.previous_unit_name = patient.current_unit_name
-        patient.current_unit_name = self.name
+        patient.current_unit_name = self.name # Isn't this premature?
+        patient.current_step = patient.next_step # Isn't this premature?
         patient.next_unit_name = None  # Temporarily
+        patient.next_step = None # Temporarily
+        patient.next_step_options = None  # Temporarily
 
         patient.append_empty_unit_stop()
         patient.request_entry_ts[csn] = request_entry_ts  # Was set earlier when request created
-        patient.unit_stops[csn] = self.name
+        patient.unit_stops[csn] = self.name  # Premature? What if we don't get in?
         patient.entry_ts[csn] = self.env.now
         patient.wait_to_enter[csn] = self.env.now - patient.request_exit_ts[csn - 1]
         if patient.wait_to_enter[csn] > 0:
@@ -409,26 +415,24 @@ class PatientCareUnit:
         yield self.env.timeout(adjusted_los)
 
         # Determine next stop in route
-        patient.next_step = patient.pfs.router.get_next_step(patient)
+        # TODO: This next line needs to take into account that we may have just skipped a stop???
+        patient.next_step_options = patient.pfs.router.get_next_step(patient)
 
-        if patient.next_step[DEST] != UnitName.EXIT:
+        if patient.next_step_options[0][DEST] != UnitName.EXIT:
             # ---------------------------------------------------
             got_new_bed = False
             skip = False
             while not got_new_bed:
 
-                # TODO: This next line needs to take into account that we may have just skipped a stop
-                patient.next_step = pfs.router.get_next_step(patient, skip=skip)
-
                 # We know where we are going, get ready to try to grab a new bed
-                patient.next_unit_name = patient.next_step[0][DEST]
+                patient.next_unit_name = patient.next_step_options[0][DEST]
                 patient.request_exit_ts[csn] = self.env.now
 
                 request_entry_ts = self.env.now  # Note the current time we tried to enter next unit
                 exiting_unit = patient.get_current_unit()
                 exiting_unit_name = exiting_unit.name  # Unit we are in right now while trying to enter this unit
 
-                outgoing_route_edge = patient.next_step[0]
+                outgoing_route_edge = patient.next_step_options[0]
 
                 # We are trying to leave the unit patient currently in to visit another unit - patient.next_unit_name
                 logging.debug(
@@ -438,13 +442,13 @@ class PatientCareUnit:
                 sampled_los = outgoing_route_edge[DATA]['planned_los']()
 
                 # Need request objects for each destination in next_step edges
-                dest_unit_names = [v for (u, v, d) in patient.next_step]
+                dest_unit_names = [v for (u, v, d) in patient.next_step_options]
                 dest_units = [pfs.patient_care_units[name] for name in dest_unit_names]
                 # Request bed(s) - Creates SimPy event objects
                 bed_request_events = {pfs.patient_care_units[v].unit.request(): {'dest_unit_name': v,
                                                                                  'dest_unit': pfs.patient_care_units[v],
                                                                                  'edge': (u, v, d)} for (u, v, d) in
-                                      patient.next_step}
+                                      patient.next_step_options}
 
                 # Yield until we get a bed or our planned los has elapsed due to being blocked
                 bed_req_los_events = [key for key in bed_request_events.keys()]
@@ -458,14 +462,18 @@ class PatientCareUnit:
                 # Check if we got a bed before our los has elapsed
                 if los_timeout not in get_bed:
                     successful_req = None
+                    next_step = None
                     for req in bed_request_events:
                         if req in get_bed:
                             successful_req = req
-                            next_edge = bed_request_events[req]['edge']
+                            next_step = bed_request_events[req]['edge']
+
+                    assert successful_req is not None
 
                     entering_unit_name = bed_request_events[successful_req]['dest_unit_name']
                     patient.bed_requests[entering_unit_name] = successful_req
                     patient.next_unit_name = entering_unit_name
+                    patient.next_step = next_step
                     patient.sampled_los = sampled_los
                     got_new_bed = True
                     skip = False
@@ -713,8 +721,8 @@ class ExitNode:
         patient.request_exit_ts[csn] = self.env.now
         patient.exit_ts[csn] = self.env.now
         patient.wait_to_exit[csn] = 0.0
-        patient.previous_step = patient.next_step
-        patient.next_step = None
+        patient.previous_step = patient.next_step_options
+        patient.next_step_options = None
 
         # Create dictionaries of timestamps for patient_stop log
         for stop_num in range(len(patient.unit_stops)):
